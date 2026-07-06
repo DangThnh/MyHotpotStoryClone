@@ -4,6 +4,15 @@ class GameScene extends Phaser.Scene {
     }
 
     init() {
+
+        // TỌA ĐỘ ĐƯỜNG ĐI TRONG SẢNH (Waypoints)
+        // 1. Cánh cửa Sảnh Chính (Nơi khách xuất hiện khi bước từ ngoài vào)
+        this.doorInsideX = 810;  
+        this.doorInsideY = 900;  // Dưới cùng sảnh chính
+
+        // 2. Trục Hành Lang Giữa (Khách sẽ đi thẳng theo trục này để né bàn)
+        this.hallwayX = 810;
+
         // 1. DATA: KHO NGUYÊN LIỆU (BẾP)
         this.inventory = {
             chili: 5,     // Ớt (Nước cốt)
@@ -106,40 +115,39 @@ class GameScene extends Phaser.Scene {
         });
 
 
-        // =================================================================
+       // =================================================================
         // KHÔNG GIAN 2: NGOÀI TRỜI (Nằm tại X: 0->540, Y: -1500)
         // =================================================================
-        
         let outX = 270;
-        let outY = -1020; // Tâm màn hình của khu vực ngoài trời (-1500 + 480)
+        let outY = -1020; 
 
-        // Nền đường phố / Vỉa hè
-        this.add.image(outX, outY, 'white_box').setDisplaySize(540, 960).setTint(0x7f8c8d);
-        this.add.text(outX, outY - 400, "TRƯỚC CỬA QUÁN LẨU", { font: 'bold 30px Arial', fill: '#fff' }).setOrigin(0.5);
+        // Vẽ ảnh nền Ngoài trời (Thay cho white_box vỉa hè)
+        // Lưu ý: Cậu cần có tấm ảnh outdoor_bg dọc tỷ lệ 9:16 (540x960)
+        this.add.image(0, -1500, 'outdoor_bg').setOrigin(0, 0).setDisplaySize(540, 960).setDepth(0);
 
-        // ---> MÔ HÌNH NHÀ HÀNG THU NHỎ (Bấm vào để quay lại bên trong)
-        let miniRestaurant = this.add.image(outX - 120, outY - 150, 'white_box').setDisplaySize(200, 250).setTint(0xd35400).setInteractive({ useHandCursor: true });
-        this.add.text(outX - 120, outY - 150, "TIỆM LẨU\n(Bấm để vào)", { font: 'bold 20px Arial', fill: '#fff', align: 'center' }).setOrigin(0.5);
+        // MÔ HÌNH NHÀ HÀNG (Có gắn cửa để khách đi vào)
+        // Điểm này cực kỳ quan trọng: Đây là tọa độ Cánh Cửa bên Ngoài Trời
+        this.doorOutsideX = outX - 100;
+        this.doorOutsideY = outY - 50;
+        
+        let miniRestaurant = this.add.image(this.doorOutsideX, this.doorOutsideY, 'mini_hotpot')
+            .setDisplaySize(200, 200)
+            .setInteractive({ useHandCursor: true });
         
         miniRestaurant.on('pointerdown', () => {
-            // Teleport camera về lại Sảnh Chính bên trong
             this.cameras.main.scrollX = 540;
             this.cameras.main.scrollY = 0;
         });
 
-        // ---> CỬA HÀNG MUA NGUYÊN LIỆU (Nằm cạnh nhà hàng)
-        let supplyStore = this.add.image(outX + 130, outY - 150, 'white_box').setDisplaySize(180, 200).setTint(0x27ae60).setInteractive({ useHandCursor: true });
-        this.add.text(outX + 130, outY - 150, "🛒 SHOP\nNGUYÊN LIỆU", { font: 'bold 18px Arial', fill: '#fff', align: 'center' }).setOrigin(0.5);
+        // CỬA HÀNG MUA NGUYÊN LIỆU 
+        let supplyStore = this.add.image(outX + 130, outY - 50, 'mini_store')
+            .setDisplaySize(180, 180)
+            .setInteractive({ useHandCursor: true });
 
-      supplyStore.on('pointerdown', () => {
-            // Lấy tọa độ trung tâm của Camera hiện tại (Đang đứng ở đâu thì lấy ở đó)
+        supplyStore.on('pointerdown', () => {
             let currentCamX = this.cameras.main.scrollX + 270; 
             let currentCamY = this.cameras.main.scrollY + 480;
-            
-            // Dịch chuyển nguyên cái UI đến đập thẳng vào mặt người chơi
             this.shopUI.setPosition(currentCamX, currentCamY);
-            
-            // Bật lên
             this.shopUI.setVisible(true);
         });
 
@@ -192,6 +200,24 @@ class GameScene extends Phaser.Scene {
 
         // KHỞI TẠO GIAO DIỆN CỬA HÀNG (ẨN MẶC ĐỊNH)
         this.createShopUI();
+
+// ==========================================
+        // GIAI ĐOẠN 3: KHỞI TẠO MÁY TRẠNG THÁI KHÁCH HÀNG
+        // ==========================================
+        this.customers = []; // Mảng chứa tất cả khách đang có mặt
+        this.waitingQueue = []; // Mảng chứa khách đang đứng chờ ngoài trời
+
+        // Vị trí xếp hàng ngoài trời (Tọa độ X thay đổi dần để xếp hàng dọc)
+        this.queueStartX = 270; 
+        this.queueStartY = -840; 
+
+        // Khởi động Timer Đẻ Khách: Mỗi 5 - 8 giây đẻ 1 tốp khách (1 tốp = 1 Container hình người)
+        this.time.addEvent({
+            delay: 6000,
+            callback: this.spawnCustomer,
+            callbackScope: this,
+            loop: true
+        });
 
     }
 
@@ -326,6 +352,232 @@ class GameScene extends Phaser.Scene {
             this.cameras.main.shake(100, 0.005);
             console.log("Không đủ tiền!");
         }
+    }
+
+   spawnCustomer() {
+        if (this.waitingQueue.length >= 5) return;
+
+        // 1. CHỌN NGẪU NHIÊN BỘ ẢNH KHÁCH HÀNG
+        let custType = Phaser.Math.Between(1, 2) === 1 ? 'cust1' : 'cust2';
+        
+        // Mặc định đẻ ra là đứng nhìn xuống (_down)
+        let customer = this.add.sprite(this.queueStartX, this.queueStartY, `${custType}_down`)
+            .setDisplaySize(50, 80)
+            .setDepth(4000);
+        
+        customer.custType = custType; // Lưu lại bộ ảnh để đổi sau này
+        customer.state = 'SPAWN'; 
+        customer.assignedTableId = null; 
+        this.customers.push(customer);
+
+        let emptyTable = this.tables.find(t => t.status === 'EMPTY');
+
+        if (emptyTable) {
+            emptyTable.status = 'OCCUPIED';
+            customer.assignedTableId = emptyTable.id;
+            customer.state = 'WALKING_TO_TABLE';
+
+            // ==========================================
+            // KỊCH BẢN ĐI 4 BƯỚC CÓ ĐỔI HƯỚNG VÀ NGỒI
+            // ==========================================
+            
+            // BƯỚC 1: Xếp hàng xong rẽ phải đi đến cửa Ngoài trời
+            customer.setTexture(`${customer.custType}_side`); 
+            customer.setFlipX(false); // Mặt quay sang phải
+
+            this.tweens.add({
+                targets: customer,
+                x: this.doorOutsideX,
+                y: this.doorOutsideY,
+                duration: 1000,
+                ease: 'Linear',
+                onComplete: () => {
+                    // BƯỚC 2: Bước qua Cửa (Teleport vào trong)
+                    customer.setPosition(this.doorInsideX, this.doorInsideY);
+
+                    // BƯỚC 3: Đi thẳng dọc Hành lang giữa (Mặt hướng lên/xuống)
+                    customer.setTexture(`${customer.custType}_down`); 
+
+                    this.tweens.add({
+                        targets: customer,
+                        y: emptyTable.y + 40,
+                        duration: 1500,
+                        ease: 'Linear',
+                        onComplete: () => {
+                            // BƯỚC 4: Rẽ ngang vào bàn ăn
+                            customer.setTexture(`${customer.custType}_side`); 
+                            
+                            // Nếu bàn nằm bên TRÁI hành lang -> Lật mặt sang Trái
+                            if (emptyTable.x < this.hallwayX) {
+                                customer.setFlipX(true); 
+                            } else {
+                                customer.setFlipX(false); // Bàn bên Phải -> Quay sang Phải
+                            }
+
+                            this.tweens.add({
+                                targets: customer,
+                                x: emptyTable.x,
+                                duration: 800,
+                                ease: 'Linear',
+                                onComplete: () => {
+                                    // ==========================================
+                                    // BƯỚC 5: ĐÃ ĐẾN BÀN! CHUYỂN SANG ẢNH NGỒI
+                                    // ==========================================
+                                    customer.setTexture(`${customer.custType}_sit`);
+                                    
+                                    // Lật lại ảnh gốc vì mặt ghế xoay cố định
+                                    customer.setFlipX(false); 
+                                    
+                                    // Nâng khách lên một chút cho khớp với mặt ghế (Tùy chỉnh Y)
+                                    customer.y -= 15; 
+                                    
+                                    customer.state = 'SIT_ORDERING'; 
+                                    this.showOrderBubble(customer); 
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+
+        } else {
+            // HẾT BÀN: Cho vào mảng Đợi và xếp hàng ngoài trời
+            customer.setTexture(`${customer.custType}_down`); // Đứng xếp hàng nhìn xuống
+            customer.state = 'WAITING_OUTSIDE';
+            this.waitingQueue.push(customer);
+            this.updateQueuePositions(); 
+        }
+    }
+
+    showOrderBubble(customer) {
+        // Bảng Menu (Theo GDD)
+        let menu = [
+            { id: 'spicy', name: '🌶️ Lẩu Cay', price: 60, req: { chili: 1, beef: 2, veggies: 1 } },
+            { id: 'herbal', name: '🌿 Lẩu Nấm', price: 40, req: { herbs: 1, veggies: 2 } },
+            { id: 'seafood', name: '🍤 Lẩu Hải Sản', price: 110, req: { bone: 1, seafood: 2, veggies: 1 } }
+        ];
+
+        // Khách chọn ngẫu nhiên 1 món
+        let chosenDish = Phaser.Utils.Array.GetRandom(menu);
+        customer.order = chosenDish;
+
+        // Vẽ Bong Bóng chat hiện lên đầu khách
+        customer.bubbleBg = this.add.rectangle(customer.x, customer.y - 50, 100, 30, 0xffffff).setStrokeStyle(2, 0x000).setDepth(4001);
+        customer.bubbleTxt = this.add.text(customer.x, customer.y - 50, chosenDish.name, { font: 'bold 12px Arial', fill: '#000' }).setOrigin(0.5).setDepth(4002);
+
+        // Chuyển trạng thái sang Đang Chờ Phục Vụ
+        customer.state = 'WAITING_FOR_FOOD';
+
+        // Đẩy yêu cầu món ăn này vào Hàng Đợi (Job Queue) để Tí nữa Nhân Viên Bếp nấu! (Sẽ làm ở GĐ 4)
+        // Hiện tại tạm thời tự động phục vụ sau 3 giây để test loop Khách Hàng.
+        this.time.delayedCall(3000, () => {
+            this.serveFoodToCustomer(customer);
+        });
+    }
+
+    serveFoodToCustomer(customer) {
+        // Đồ ăn ra: Ẩn bong bóng gọi món
+        if (customer.bubbleBg) {
+            customer.bubbleBg.destroy();
+            customer.bubbleTxt.destroy();
+        }
+
+        // Đổi màu khách sang Xanh Lá (Biểu hiện đang ăn vui vẻ)
+        
+        customer.state = 'EATING';
+
+        // TẠO HOẠT ẢNH NHAI ĐỒ ĂN (Dập dềnh lên xuống)
+        let eatTween = this.tweens.add({
+            targets: customer,
+            angle: 3,           // Nghiêng nhẹ sang phải 3 độ
+            y: customer.y - 2,  // Hơi nhổm người lên 2 pixel
+            yoyo: true,         // Quay lại vị trí 0
+            repeat: -1,         // Lặp liên tục
+            duration: 350,      // Nhịp nhai 350ms
+            ease: 'Sine.easeInOut' // Chuyển động mượt mà
+        });
+
+        
+            // Ăn xong ngừng dập dềnh
+
+
+        // Khách ngồi ăn 5 giây (Tăng tốc để test, thực tế GDD là 15s)
+        this.time.delayedCall(5000, () => {
+             eatTween.stop();
+              customer.setAngle(0);
+            // 1. ĂN XONG TRẢ TIỀN! (Bàn VIP x2 tiền)
+            let table = this.tables.find(t => t.id === customer.assignedTableId);
+            let finalPrice = table.isVip ? customer.order.price * 2 : customer.order.price;
+            
+            this.gold += finalPrice;
+            localStorage.setItem('hotpot_gold', this.gold.toString());
+            this.goldText.setText(`🪙 ${this.gold}`);
+
+            // Bay chữ Tiền Vàng
+            let moneyTxt = this.add.text(customer.x, customer.y - 40, `+${finalPrice} Vàng`, { font: 'bold 18px Arial', fill: '#ffd700', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(5000);
+            this.tweens.add({ targets: moneyTxt, y: moneyTxt.y - 50, alpha: 0, duration: 1500, onComplete: () => moneyTxt.destroy() });
+
+            // 2. GIẢI PHÓNG BÀN & THU HỒI KHÁCH
+            table.status = 'EMPTY'; // Bàn trống rồi, khách mới có thể vào!
+            
+            // Xóa khách này khỏi mảng
+            this.customers = this.customers.filter(c => c !== customer);
+            customer.destroy();
+
+           // 3. GỌI KHÁCH TIẾP THEO Ở NGOÀI TRỜI VÀO
+            if (this.waitingQueue.length > 0) {
+                let nextCustomer = this.waitingQueue.shift(); 
+                this.updateQueuePositions(); 
+                
+                table.status = 'OCCUPIED';
+                nextCustomer.assignedTableId = table.id;
+                nextCustomer.state = 'WALKING_TO_TABLE';
+
+                // KỊCH BẢN ĐI 4 BƯỚC (Dành cho người đứng chờ)
+                this.tweens.add({
+                    targets: nextCustomer,
+                    x: this.doorOutsideX, // Bước 1: Đi từ chỗ xếp hàng tới Cửa ngoài
+                    y: this.doorOutsideY,
+                    duration: 1000,
+                    ease: 'Linear',
+                    onComplete: () => {
+                        nextCustomer.setPosition(this.doorInsideX, this.doorInsideY); // Bước 2: Teleport vào trong
+                        this.tweens.add({
+                            targets: nextCustomer,
+                            y: table.y + 40, // Bước 3: Đi dọc hành lang giữa
+                            duration: 1500,
+                            ease: 'Linear',
+                            onComplete: () => {
+                                this.tweens.add({
+                                    targets: nextCustomer,
+                                    x: table.x, // Bước 4: Rẽ vào bàn
+                                    duration: 800,
+                                    ease: 'Linear',
+                                    onComplete: () => {
+                                        nextCustomer.state = 'SIT_ORDERING';
+                                        this.showOrderBubble(nextCustomer);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+    updateQueuePositions() {
+        // Xếp các khách đang đợi thành hàng ngũ ngoài đường
+        this.waitingQueue.forEach((cust, index) => {
+            let targetX = this.queueStartX + (index * 45) - 90; // Dàn hàng ngang ra
+            this.tweens.add({
+                targets: cust,
+                x: targetX,
+                y: this.queueStartY,
+                duration: 500,
+                ease: 'Power1'
+            });
+        });
     }
 
 }
