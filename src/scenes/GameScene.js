@@ -57,6 +57,9 @@ class GameScene extends Phaser.Scene {
 
         // Giỏ hàng tạm thời khi đang chọn đồ trong UI
         this.cart = { chili: 0, herbs: 0, bone: 0, beef: 0, veggies: 0, seafood: 0 };
+
+        // Khai báo trong hàm init()
+        this.pendingOrders = [];
     }
 
   create() {
@@ -93,25 +96,110 @@ class GameScene extends Phaser.Scene {
             this.cameras.main.scrollY = -1500;
         });
 
+       // ==========================================
+        // 3. ẨN CÁC KHỐI BÀN ẢO VÀ NHẬN CLICK
         // ==========================================
-        // 3. ẨN CÁC KHỐI BÀN ẢO (INVISIBLE HITBOX)
-        // ==========================================
-        // Tấm ảnh AI gen đã có Bàn và Ghế, ta chỉ dùng khối của Phaser làm Vùng Click Ảo (Tàng hình)
         this.tableSprites = {}; 
         
         this.tables.forEach(tableData => {
-            // Đặt Alpha = 0.001 (Gần như tàng hình nhưng vẫn click được)
+            // Đặt alpha 0.001 để tàng hình
             let tableSprite = this.add.image(tableData.x, tableData.y, 'white_box')
-                .setDisplaySize(160, 100) // Kích thước vùng click bao trọn cái Bàn trong ảnh
-                .setAlpha(0.001) // <--- TÀNG HÌNH VÙNG CLICK
-                .setInteractive({ useHandCursor: true });
+                .setDisplaySize(160, 100).setAlpha(0.001).setDepth(100).setInteractive({ useHandCursor: true });
             
-            // Text hiển thị Trạng thái/Tiền mở khóa vẫn nổi lên đè trên Bàn
             let statusText = this.add.text(tableData.x, tableData.y, tableData.isLocked ? `🔒 ${tableData.unlockPrice}` : tableData.status, { 
                 font: 'bold 22px Arial', fill: '#fff', stroke: '#000', strokeThickness: 4 
             }).setOrigin(0.5).setDepth(50);
 
             this.tableSprites[tableData.id] = { bg: tableSprite, text: statusText };
+
+            // BẮT SỰ KIỆN TƯƠNG TÁC TAY VÀO BÀN ĂN
+            tableSprite.on('pointerup', () => {
+                // NẾU ĐANG VUỐT MÀN HÌNH THÌ KHÔNG TÍNH LÀ CLICK BÀN
+                if (this.isDragging) return;
+
+                if (tableData.isLocked) {
+                    this.cameras.main.shake(100, 0.005);
+                    return;
+                }
+
+                // TÌM KHÁCH HÀNG ĐANG NGỒI Ở BÀN NÀY
+                let seatedCustomer = this.customers.find(c => c.assignedTableId === tableData.id);
+                if (!seatedCustomer) return;
+
+                // CÁC TRẠNG THÁI BẤM VÀO BÀN
+                if (seatedCustomer.state === 'SIT_ORDERING') {
+                    // 1. NHẬN ORDER
+                    seatedCustomer.state = 'WAITING_FOR_FOOD';
+
+                    //seatedCustomer.state = 'ORDER_TAKEN';
+                    if (seatedCustomer.bubbleTxt) {
+                        seatedCustomer.bubbleTxt.setText('⏳ Đang nấu...');
+                        seatedCustomer.bubbleBg.setFillStyle(0xf1c40f);
+                    }
+                    this.pendingOrders.push({
+                        customerRef: seatedCustomer,
+                        recipe: seatedCustomer.order.req 
+                    });
+                    
+                    // Update chữ trên Nút Nồi Lẩu trong Bếp
+                    if (this.orderCountTxt) this.orderCountTxt.setText(`Đơn đang chờ: ${this.pendingOrders.length}`);
+
+                } else if (seatedCustomer.state === 'FOOD_READY') {
+                    // 2. BƯNG ĐỒ ĂN LÊN BÀN
+                    this.serveFoodToCustomer(seatedCustomer);
+                } 
+                // Phần Dọn dẹp bàn (DONE_EATING) ta sẽ làm ở Tác vụ 4.4 sau
+            });
+    
+
+            // ... (Khai báo tableSprite và statusText giữ nguyên)
+
+            // BẮT SỰ KIỆN TƯƠNG TÁC TAY VÀO BÀN ĂN
+            tableSprite.on('pointerdown', () => {
+                // Chỉ xử lý nếu Camera không đang bị lướt (Tránh bấm nhầm khi đang vuốt màn hình)
+                if (this.isDragging) return;
+
+                // Cảnh báo nếu bàn đang bị khóa chưa mua
+                if (tableData.isLocked) {
+                    this.cameras.main.shake(100, 0.005);
+                    console.log(`Cần ${tableData.unlockPrice} Vàng để mở bàn này!`);
+                    return;
+                }
+
+                // 1. TÌM KHÁCH HÀNG ĐANG NGỒI Ở BÀN NÀY (NẾU CÓ)
+                let seatedCustomer = this.customers.find(c => c.assignedTableId === tableData.id);
+
+                if (!seatedCustomer) return; // Bàn trống thì bấm không có tác dụng
+
+                // 2. XỬ LÝ THEO TỪNG TRẠNG THÁI CỦA KHÁCH
+                if (seatedCustomer.state === 'SIT_ORDERING') {
+                    // Trạng thái 1: Khách đang giơ Menu đòi ăn -> Bấm vào để NHẬN ORDER
+                    seatedCustomer.state = 'ORDER_TAKEN';
+                    
+                    // Đổi hình bong bóng thành icon Đồng hồ cát (Chờ nấu)
+                    if (seatedCustomer.bubbleTxt) {
+                        seatedCustomer.bubbleTxt.setText('⏳ Đang nấu...');
+                        seatedCustomer.bubbleBg.setFillStyle(0xf1c40f); // Đổi màu nền bong bóng sang Vàng
+                    }
+
+                    // Đẩy Order này vào mảng chờ của Bếp (Sẽ tạo ở Tác vụ 4.3)
+                    this.pendingOrders.push({
+                        customerRef: seatedCustomer,
+                        recipe: seatedCustomer.order.req // { chili: 1, beef: 2... }
+                    });
+
+                    this.orderCountTxt.setText(`Đơn đang chờ: ${this.pendingOrders.length}`);
+
+                } else if (seatedCustomer.state === 'FOOD_READY') {
+                    // Trạng thái 2: Bếp đã nấu xong đồ -> Bấm vào để PHỤC VỤ (BƯNG LÊN MẶT BÀN)
+                    this.serveFoodToCustomer(seatedCustomer);
+
+                } else if (seatedCustomer.state === 'DONE_EATING') {
+                    // Trạng thái 3: Khách ăn xong để lại tiền -> Bấm vào để DỌN BÀN
+                    this.cleanTableAndCollectMoney(seatedCustomer, tableData);
+                }
+            });
+
         });
 
 
@@ -156,32 +244,37 @@ class GameScene extends Phaser.Scene {
         this.add.text(outX, outY + 180, "Ghế chờ của thực khách...", { font: 'italic 20px Arial', fill: '#ccc' }).setOrigin(0.5);
 
 
-        // ==========================================
-        // HỆ THỐNG KÉO VUỐT CAMERA (CHỈ CHO PHÉP KHI Ở BÊN TRONG)
+      // ==========================================
+        // 4. HỆ THỐNG KÉO VUỐT CAMERA (ĐÃ FIX LỖI CLICK)
         // ==========================================
         this.isDragging = false;
         this.dragStartX = 0;
         this.camStartX = 0;
 
         this.input.on('pointerdown', (pointer) => {
-            // CHỈ CHO PHÉP VUỐT KHI Ở BÊN TRONG QUÁN (scrollY === 0)
             if (this.cameras.main.scrollY === 0) {
-                this.isDragging = true;
+                this.isDragging = false; // Mới chạm vào, CHƯA TÍNH LÀ VUỐT
                 this.dragStartX = pointer.x;
                 this.camStartX = this.cameras.main.scrollX;
             }
         });
 
         this.input.on('pointermove', (pointer) => {
-            if (this.isDragging && this.cameras.main.scrollY === 0) {
-                let deltaX = this.dragStartX - pointer.x;
-                this.cameras.main.scrollX = this.camStartX + deltaX;
+            if (pointer.isDown && this.cameras.main.scrollY === 0) {
+                // CHÌ TÍNH LÀ VUỐT NẾU NGÓN TAY DI CHUYỂN HƠN 5 PIXEL
+                if (Math.abs(pointer.x - this.dragStartX) > 5) {
+                    this.isDragging = true; 
+                    let deltaX = this.dragStartX - pointer.x;
+                    this.cameras.main.scrollX = this.camStartX + deltaX;
+                }
             }
         });
 
-        this.input.on('pointerup', () => { this.isDragging = false; });
-        this.input.on('pointerout', () => { this.isDragging = false; });
-   
+        this.input.on('pointerup', () => {
+            // Khi nhấc tay lên, delay 50ms rồi mới reset cờ dragging để tránh click nhầm
+            this.time.delayedCall(50, () => { this.isDragging = false; });
+        });
+        
         // ==========================================
         // HUD: THANH CÔNG CỤ GHIM TRÊN MÀN HÌNH (SCROLL FACTOR = 0)
         // ==========================================
@@ -217,6 +310,89 @@ class GameScene extends Phaser.Scene {
             callback: this.spawnCustomer,
             callbackScope: this,
             loop: true
+        });
+
+        // =================================================================
+        // KHU VỰC BẾP (BÊN TRÁI MÀN HÌNH: X=270)
+        // =================================================================
+
+        // 1. NÚT: NỒI LẨU KHỔNG LỒ (Bấm để Nấu ăn)
+        let stoveBtn = this.add.rectangle(270, 500, 250, 150, 0xe74c3c).setInteractive({ useHandCursor: true });
+        this.add.text(270, 500, "🍲 NẤU LẨU", { font: 'bold 30px Arial', fill: '#fff' }).setOrigin(0.5);
+        
+        // Text hiển thị số đơn hàng đang chờ nấu
+        this.orderCountTxt = this.add.text(270, 600, "Đơn đang chờ: 0", { font: '18px Arial', fill: '#fff' }).setOrigin(0.5);
+
+        stoveBtn.on('pointerdown', () => {
+            if (this.isDragging) return;
+
+            // KIỂM TRA NÚT THẮT 1: BỒN RỬA ĐẦY CHÉN BẨN?
+            if (this.dirtyDishes >= 5) {
+                this.cameras.main.shake(200, 0.01);
+                console.log("HẾT ĐĨA SẠCH! Phải rửa chén ngay!");
+                return;
+            }
+
+            // KIỂM TRA NÚT THẮT 2: CÓ ĐƠN HÀNG NÀO KHÔNG?
+            if (this.pendingOrders.length === 0) {
+                console.log("Bếp đang rảnh rỗi!");
+                return;
+            }
+
+            // Lấy Order cũ nhất ra nấu (FIFO - First In First Out)
+            let currentOrder = this.pendingOrders[0];
+            let req = currentOrder.recipe; // Yêu cầu nguyên liệu: vd { chili: 1, beef: 2 }
+
+            // KIỂM TRA NÚT THẮT 3: CÓ ĐỦ NGUYÊN LIỆU TRONG KHO KHÔNG?
+            let hasEnoughItems = true;
+            for (let item in req) {
+                if (this.inventory[item] < req[item]) {
+                    hasEnoughItems = false;
+                    break;
+                }
+            }
+
+            if (!hasEnoughItems) {
+                this.cameras.main.shake(100, 0.005);
+                console.log("THIẾU NGUYÊN LIỆU! Ra ngoài trời mua thêm đi!");
+                return;
+            }
+
+            // NẾU VƯỢT QUA MỌI RÀO CẢN -> NẤU THÀNH CÔNG!
+            // 1. Trừ kho
+            for (let item in req) {
+                this.inventory[item] -= req[item];
+            }
+            this.updateInventoryHUD();
+
+            // 2. Rút Order khỏi mảng chờ
+            this.pendingOrders.shift(); 
+            this.orderCountTxt.setText(`Đơn đang chờ: ${this.pendingOrders.length}`);
+
+            // 3. Đổi trạng thái khách hàng ngoài Sảnh thành "Đồ ăn đã sẵn sàng"
+            currentOrder.customerRef.state = 'FOOD_READY';
+            
+            if (currentOrder.customerRef.bubbleTxt) {
+                currentOrder.customerRef.bubbleTxt.setText('🍲 Xong! Bưng ra!');
+                currentOrder.customerRef.bubbleBg.setFillStyle(0x2ecc71); // Đổi bong bóng thành xanh lá
+            }
+
+            console.log("Nấu xong 1 nồi lẩu! Mau ra Sảnh bưng cho khách!");
+        });
+
+        // 2. NÚT: BỒN RỬA CHÉN (Bấm để rửa bát thủ công)
+        let sinkBtn = this.add.rectangle(270, 750, 200, 100, 0x3498db).setInteractive({ useHandCursor: true });
+        this.add.text(270, 750, "🚰 RỬA BÁT", { font: 'bold 24px Arial', fill: '#fff' }).setOrigin(0.5);
+
+        this.dirtyDishTxt = this.add.text(270, 830, "Bát bẩn: 0/5", { font: '18px Arial', fill: '#fff' }).setOrigin(0.5);
+
+        sinkBtn.on('pointerdown', () => {
+            if (this.isDragging) return;
+
+            if (this.dirtyDishes > 0) {
+                this.dirtyDishes--; // Mỗi click rửa 1 cái bát
+                this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
+            }
         });
 
     }
@@ -466,13 +642,13 @@ class GameScene extends Phaser.Scene {
         customer.bubbleTxt = this.add.text(customer.x, customer.y - 50, chosenDish.name, { font: 'bold 12px Arial', fill: '#000' }).setOrigin(0.5).setDepth(4002);
 
         // Chuyển trạng thái sang Đang Chờ Phục Vụ
-        customer.state = 'WAITING_FOR_FOOD';
+        // customer.state = 'WAITING_FOR_FOOD';
 
         // Đẩy yêu cầu món ăn này vào Hàng Đợi (Job Queue) để Tí nữa Nhân Viên Bếp nấu! (Sẽ làm ở GĐ 4)
         // Hiện tại tạm thời tự động phục vụ sau 3 giây để test loop Khách Hàng.
-        this.time.delayedCall(3000, () => {
-            this.serveFoodToCustomer(customer);
-        });
+        // this.time.delayedCall(3000, () => {
+        //     this.serveFoodToCustomer(customer);
+        // });
     }
 
     serveFoodToCustomer(customer) {
