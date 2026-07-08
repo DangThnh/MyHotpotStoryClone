@@ -30,6 +30,10 @@ class BootScene extends Phaser.Scene {
         this.load.image('mini_store', 'mini_store.png'); 
         this.load.image('mini_hotpot', 'mini_hotpot.png');
 
+        // TẢI ẢNH 3 LOẠI NỒI LẨU THỰC TẾ
+        this.load.image('pot_spicy', 'pot_spicy.png');     // Ảnh lẩu cay
+        this.load.image('pot_herbal', 'pot_herbal.png');   // Ảnh lẩu nấm
+        this.load.image('pot_seafood', 'pot_seafood.png'); // Ảnh lẩu hải sản
     }
 
     create() {
