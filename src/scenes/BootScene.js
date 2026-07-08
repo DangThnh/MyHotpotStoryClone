@@ -34,6 +34,9 @@ class BootScene extends Phaser.Scene {
         this.load.image('pot_spicy', 'pot_spicy.png');     // Ảnh lẩu cay
         this.load.image('pot_herbal', 'pot_herbal.png');   // Ảnh lẩu nấm
         this.load.image('pot_seafood', 'pot_seafood.png'); // Ảnh lẩu hải sản
+
+        this.load.image('sink_dirty', 'sink_dirty.png');     // Ảnh bát đĩa bẩn trong bồn
+        this.load.image('angry_bubble', 'angry_bubble.png'); // Icon tức giận 💢
     }
 
     create() {

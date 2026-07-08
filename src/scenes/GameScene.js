@@ -133,10 +133,31 @@ class GameScene extends Phaser.Scene {
           tableSprite.on('pointerup', () => {
                 if (this.isDragging) return;
 
-                // 1. CLICK ĐỂ MỞ KHÓA BÀN (NẾU BÀN ĐANG KHÓA)
+              // 1. CLICK ĐỂ MỞ KHÓA BÀN MỚI
                 if (tableData.isLocked) {
-                    this.cameras.main.shake(100, 0.005);
-                    console.log(`Cần ${tableData.unlockPrice} Vàng để mở bàn này!`);
+                    if (this.gold >= tableData.unlockPrice) {
+                        // Đủ tiền -> Trực tiếp mở khóa!
+                        this.gold -= tableData.unlockPrice;
+                        localStorage.setItem('hotpot_gold', this.gold.toString());
+                        this.goldText.setText(`🪙 ${this.gold}`);
+
+                        tableData.isLocked = false;
+                        tableData.status = 'EMPTY';
+
+                        // Đổi màu bàn ăn sang trắng sáng (Phản hồi thị giác)
+                        let normalColor = tableData.isVip ? 0xe74c3c : 0xecf0f1;
+                        tableSprite.setTint(normalColor);
+
+                        // Ẩn chữ giá tiền khóa bàn đi
+                        statusText.setText('EMPTY');
+                        
+                        console.log(`Đã mở khóa thành công Bàn ${tableData.id}!`);
+                    } else {
+                        // Thiếu tiền: Rung lắc camera cảnh báo
+                        this.cameras.main.shake(150, 0.005);
+                        this.showNotification("Bạn không đủ tiền");
+                        console.log("Không đủ Vàng để mở khóa bàn này!");
+                    }
                     return;
                 }
 
@@ -166,8 +187,8 @@ class GameScene extends Phaser.Scene {
         this.doorOutsideX = outX - 100;
         this.doorOutsideY = outY - 50;
         
-        let miniRestaurant = this.add.image(this.doorOutsideX, this.doorOutsideY, 'mini_hotpot')
-            .setDisplaySize(200, 200)
+        let miniRestaurant = this.add.image(this.doorOutsideX -25, this.doorOutsideY - 130, 'mini_hotpot')
+            .setDisplaySize(200, 280)
             .setInteractive({ useHandCursor: true });
         
         miniRestaurant.on('pointerdown', () => {
@@ -176,8 +197,8 @@ class GameScene extends Phaser.Scene {
         });
 
         // CỬA HÀNG MUA NGUYÊN LIỆU 
-        let supplyStore = this.add.image(outX + 130, outY - 50, 'mini_store')
-            .setDisplaySize(180, 180)
+        let supplyStore = this.add.image(outX + 130, outY - 180, 'mini_store')
+            .setDisplaySize(180, 280)
             .setInteractive({ useHandCursor: true });
 
         supplyStore.on('pointerdown', () => {
@@ -302,20 +323,72 @@ class GameScene extends Phaser.Scene {
 
        
 
-        // 2. NÚT: BỒN RỬA CHÉN (Bấm để rửa bát thủ công)
-        let sinkBtn = this.add.rectangle(270, 750, 200, 100, 0x3498db).setInteractive({ useHandCursor: true });
-        this.add.text(270, 750, "🚰 RỬA BÁT", { font: 'bold 24px Arial', fill: '#fff' }).setOrigin(0.5);
+       // =================================================================
+        // KHU VỰC BỒN RỬA CHÉN THỦ CÔNG (ĐỒNG BỘ NÚT BẤM VÀ ĐỒ HỌA)
+        // =================================================================
+        this.sinkX = 120; // Cậu chỉ cần chỉnh tọa độ x, y duy nhất tại đây!
+        this.sinkY = 780;
+        this.isWashing = false; 
 
-        this.dirtyDishTxt = this.add.text(270, 830, "Bát bẩn: 0/5", { font: '18px Arial', fill: '#fff' }).setOrigin(0.5);
+        // 1. Sprite bát đĩa bẩn (Hợp nhất Đồ họa và Nút bấm bằng cách setInteractive)
+        this.dirtyDishesSprite = this.add.sprite(this.sinkX, this.sinkY - 10, 'sink_dirty')
+            .setDisplaySize(100, 80) // Tự do đổi kích thước ảnh, vùng click sẽ tự co dãn theo!
+            .setDepth(15)
+            .setInteractive({ useHandCursor: true }) // <--- BIẾN ẢNH BÁT BẨN THÀNH NÚT BẤM
+            .setVisible(false);
 
-        sinkBtn.on('pointerdown', () => {
-            if (this.isDragging) return;
+        // 2. Thanh Loading Rửa Bát (Tọa độ tự động ăn theo sinkX, sinkY)
+        this.washBg = this.add.rectangle(this.sinkX, this.sinkY - 50, 80, 10, 0x000000).setDepth(20).setVisible(false);
+        this.washFill = this.add.rectangle(this.sinkX - 40, this.sinkY - 50, 0, 10, 0x3498db).setOrigin(0, 0.5).setDepth(21).setVisible(false);
+
+        // 3. Text hiển thị số bát bẩn (Tự động ăn theo sinkX, sinkY)
+        this.dirtyDishTxt = this.add.text(this.sinkX, this.sinkY + 45, "Bát bẩn: 0/5", { 
+            font: 'bold 14px Arial', fill: '#ff4757' 
+        }).setOrigin(0.5).setDepth(22);
+
+        // BẮT SỰ KIỆN CLICK TRỰC TIẾP LÊN ẢNH BÁT ĐĨA BẨN ĐỂ RỬA CHÉN
+        this.dirtyDishesSprite.on('pointerup', () => {
+            if (this.isDragging || this.isWashing) return;
 
             if (this.dirtyDishes > 0) {
-                this.dirtyDishes--; // Mỗi click rửa 1 cái bát
-                this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
+                this.isWashing = true;
+
+                // Hiện thanh Loading
+                this.washBg.setVisible(true);
+                this.washFill.setVisible(true).width = 0;
+
+                // Chạy thanh Loading rửa bát trong 2 giây (2000ms)
+                this.tweens.add({
+                    targets: this.washFill,
+                    width: 80,
+                    duration: 2000,
+                    onComplete: () => {
+                        this.dirtyDishes--; 
+                        this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
+                        
+                        // Ẩn ảnh bát đĩa bẩn nếu đã rửa sạch hết
+                        if (this.dirtyDishes === 0) {
+                            this.dirtyDishesSprite.setVisible(false);
+                        }
+
+                        this.washBg.setVisible(false);
+                        this.washFill.setVisible(false);
+                        this.isWashing = false;
+
+                        console.log("Đã rửa xong 1 cái bát!");
+                    }
+                });
             }
         });
+
+        // sinkBtn.on('pointerdown', () => {
+        //     if (this.isDragging) return;
+
+        //     if (this.dirtyDishes > 0) {
+        //         this.dirtyDishes--; // Mỗi click rửa 1 cái bát
+        //         this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
+        //     }
+        // });
 
     }
 
@@ -343,6 +416,7 @@ class GameScene extends Phaser.Scene {
         // KIỂM TRA NÚT THẮT 1: BỒN RỬA ĐẦY CHÉN BẨN? (Giữ nguyên logic cũ)
         if (this.dirtyDishes >= 5) {
             this.cameras.main.shake(200, 0.01);
+              this.showNotification("Hãy rửa bát trước");
             console.log("HẾT ĐĨA SẠCH! Phải rửa chén ngay!");
             return;
         }
@@ -360,6 +434,7 @@ class GameScene extends Phaser.Scene {
 
             if (!hasEnoughItems) {
                 this.cameras.main.shake(100, 0.005);
+                this.showNotification("Thiếu nguyên liệu"); 
                 console.log("THIẾU NGUYÊN LIỆU!");
                 return;
             }
@@ -553,6 +628,8 @@ class GameScene extends Phaser.Scene {
     }
 
   spawnCustomer() {
+    //if (this.isSpawnerLocked || this.waitingQueue.length >= 5) return;
+    
         if (this.waitingQueue.length >= 5) return;
 
         let custType = Phaser.Math.Between(1, 2) === 1 ? 'cust1' : 'cust2';
@@ -587,6 +664,9 @@ class GameScene extends Phaser.Scene {
                     // MẸO 1MS: CHỜ 1 KHUNG HÌNH ĐỂ GIẢI PHÓNG HOÀN TOÀN TWEEN CŨ
                     // =======================================================
                     this.time.delayedCall(1, () => {
+
+                        if (!customer || !customer.active) return;
+
                         customer.setPosition(this.doorInsideX, this.doorInsideY);
                         customer.setTexture(`${customer.custType}_down`); 
 
@@ -616,6 +696,7 @@ class GameScene extends Phaser.Scene {
                                         customer.setFlipX(false); 
                                         
                                         customer.state = 'SIT_ORDERING'; 
+                                         this.startPatienceTimer(customer, 'SIT_ORDERING');
                                         this.showOrderBubble(customer); 
                                     }
                                 });
@@ -630,6 +711,8 @@ class GameScene extends Phaser.Scene {
             customer.state = 'WAITING_OUTSIDE';
             this.waitingQueue.push(customer);
             this.updateQueuePositions(); 
+            
+        this.startPatienceTimer(customer, 'WAITING_OUTSIDE'); // Bắt đầu đếm ngược giận dữ ngoài đường
         }
     }
 
@@ -661,7 +744,9 @@ class GameScene extends Phaser.Scene {
             if (this.isDragging) return; // Đang vuốt màn hình thì bỏ qua
 
             if (customer.state === 'SIT_ORDERING') {
+
                 customer.state = 'WAITING_FOR_FOOD';
+                this.startPatienceTimer(customer, 'WAITING_FOR_FOOD');
 
                 // Đổi giao diện bong bóng sang màu vàng (Đang nấu)
                 customer.bubbleTxt.setText('⏳ Đang nấu...');
@@ -727,6 +812,14 @@ class GameScene extends Phaser.Scene {
 
         // Khách ngồi ăn 5 giây
         this.time.delayedCall(5000, () => {
+
+            // CỘNG 1 BÁT BẨN KHI KHÁCH ĂN XONG
+            this.dirtyDishes++;
+            this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
+            
+            // Hiện ảnh bát bẩn chồng chất trong bồn
+            this.dirtyDishesSprite.setVisible(true);
+
             eatTween.stop(); 
             customer.setAngle(0); 
             
@@ -750,6 +843,12 @@ class GameScene extends Phaser.Scene {
            // 3. GỌI KHÁCH TIẾP THEO Ở NGOÀI TRỜI VÀO
             if (this.waitingQueue.length > 0) {
                 let nextCustomer = this.waitingQueue.shift(); 
+
+                if (nextCustomer.patienceTimer) {
+                    nextCustomer.patienceTimer.remove();
+                    nextCustomer.patienceTimer = null;
+                }
+
                 this.updateQueuePositions(); 
                 
                 table.status = 'OCCUPIED';
@@ -765,6 +864,9 @@ class GameScene extends Phaser.Scene {
                     onComplete: () => {
                         // HOÃN 1MS ĐỂ PHÒNG THỦ LỖI TWEEN
                         this.time.delayedCall(1, () => {
+
+                            if (!nextCustomer || !nextCustomer.active) return;
+                            
                             nextCustomer.setPosition(this.doorInsideX, this.doorInsideY); 
                             this.tweens.add({
                                 targets: nextCustomer,
@@ -804,6 +906,130 @@ class GameScene extends Phaser.Scene {
                 duration: 500,
                 ease: 'Power1'
             });
+        });
+    }
+
+    startPatienceTimer(customer, stateName) {
+        // Nếu khách đã có Timer đang chạy -> Hủy cái cũ đi để đếm lại từ đầu cho trạng thái mới
+        if (customer.patienceTimer) {
+            customer.patienceTimer.remove();
+        }
+
+        // Bắt đầu đếm ngược 60 giây (60000ms)
+        customer.patienceTimer = this.time.delayedCall(60000, () => {
+            this.handleCustomerAngryLeave(customer, stateName);
+        }, [], this);
+    }
+
+    handleCustomerAngryLeave(customer, stateAtLeave) {
+        if (!customer || !customer.active) return;
+
+        console.log(`😡 Khách đã bỏ về vì chờ quá lâu ở trạng thái: ${stateAtLeave}!`);
+
+        // 1. DỌN SẠCH CÁC LIÊN KẾT ĐƠN HÀNG CŨ TRONG BẾP (ĐỂ TRÁNH BẾP NẤU CHO MA)
+        this.pendingOrders = this.pendingOrders.filter(order => order.customerRef !== customer);
+        this.refreshStovesIndicator();
+
+        // 2. HIỆN BONG BÓNG GIẬN DỮ 💢
+        if (customer.bubbleBg) {
+            customer.bubbleBg.destroy();
+            customer.bubbleTxt.destroy();
+        }
+
+        let angryBubble = this.add.sprite(customer.x, customer.y - 60, 'angry_bubble').setDisplaySize(40, 40).setDepth(4005);
+        
+        // 3. CHO KHÁCH ĐI BỘ RA KHỎI TIỆM (NẾU ĐANG NGỒI TRONG QUÁN)
+        if (stateAtLeave !== 'WAITING_OUTSIDE') {
+            let table = this.tables.find(t => t.id === customer.assignedTableId);
+            table.status = 'EMPTY'; // Giải phóng bàn ăn ngay
+
+            this.tweens.add({
+                targets: customer,
+                x: this.doorInsideX,
+                y: this.doorInsideY,
+                duration: 1000,
+                onComplete: () => {
+                    customer.setPosition(this.doorOutsideX, this.doorOutsideY);
+                    this.tweens.add({
+                        targets: customer,
+                        x: this.queueStartX,
+                        y: this.queueStartY,
+                        duration: 1000,
+                        onComplete: () => {
+                            angryBubble.destroy();
+                            this.customers = this.customers.filter(c => c !== customer);
+                            customer.destroy();
+                        }
+                    });
+                }
+            });
+        } else {
+            // Nếu giận dữ ngoài đường thì tự hủy luôn
+            angryBubble.destroy();
+            this.waitingQueue = this.waitingQueue.filter(c => c !== customer);
+            this.customers = this.customers.filter(c => c !== customer);
+            customer.destroy();
+            this.updateQueuePositions();
+        }
+
+        // 4. HÌNH PHẠT: KHÓA SPAWNER ĐẺ KHÁCH TRONG 1 PHÚT (60 GIÂY)
+        // this.lockSpawner();
+    }
+
+    lockSpawner() {
+        if (this.isSpawnerLocked) return; // Nếu đang bị phạt rồi thì thôi
+        this.isSpawnerLocked = true;
+
+        // Vẽ một Text cảnh báo to màu đỏ ghim trên màn hình
+        let penaltyTxt = this.add.text(270, 80, "⚠️ CỬA HÀNG BỊ PHẠT ĐÓNG CỬA 1 PHÚT!", { 
+            font: 'bold 18px Arial', fill: '#ff4757', stroke: '#000', strokeThickness: 4 
+        }).setOrigin(0.5).setDepth(20005).setScrollFactor(0);
+
+        // Hiệu ứng nhấp nháy chữ phạt
+        this.tweens.add({ targets: penaltyTxt, alpha: 0.3, yoyo: true, repeat: -1, duration: 500 });
+
+        // Tạm thời dừng Spawner
+        let originalTimer = this.time.addEvent({
+            delay: 1000,
+            callback: () => {}, // Chạy rỗng để đếm ngược
+            repeat: 59
+        });
+
+        this.time.delayedCall(60000, () => {
+            this.isSpawnerLocked = false;
+            penaltyTxt.destroy(); // Hết phạt dọn text đi
+            console.log("Cửa hàng đã mở cửa đón khách trở lại!");
+        });
+    }
+
+    showNotification(message) {
+        // Nếu đang có một thông báo cũ hiển thị -> Hủy nó đi để tránh chữ đè lên nhau
+        if (this.activeNotification) {
+            this.activeNotification.destroy();
+        }
+
+        // Tạo Text thông báo nằm ngay chính giữa màn hình (Ghim cố định theo mắt người chơi)
+        this.activeNotification = this.add.text(270, 480, message, {
+            font: 'bold 24px Arial',
+            fill: '#ff4757', // Màu đỏ cảnh báo rực rỡ
+            stroke: '#000000',
+            strokeThickness: 6,
+            align: 'center'
+        }).setOrigin(0.5).setDepth(30000).setScrollFactor(0); // setScrollFactor(0) để ghim chặt giữa camera!
+
+        // Hiệu ứng bay lên nhẹ và mờ dần biến mất sau 1.5 giây
+        this.tweens.add({
+            targets: this.activeNotification,
+            y: 430, // Bay lên trên 50px
+            alpha: 0, // Mờ dần về 0
+            duration: 1500,
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+                if (this.activeNotification) {
+                    this.activeNotification.destroy();
+                    this.activeNotification = null;
+                }
+            }
         });
     }
 
