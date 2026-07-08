@@ -28,16 +28,16 @@ class GameScene extends Phaser.Scene {
         // 2. DATA: QUẢN LÝ BÀN ĂN TRONG SẢNH (STATE MACHINE)
         // Mỗi bàn có ID, Tọa độ X/Y, Trạng thái hiện tại, và cờ nhận diện Bàn VIP
         // 2. DATA: QUẢN LÝ BÀN ĂN (ĐÃ MỞ RỘNG TỌA ĐỘ)
-        this.tables = [
-            // SẢNH CHÍNH (Khu vực giữa: X khoảng 600 - 1000)
-            { id: 1, x: 700, y: 350, status: 'EMPTY', isLocked: false, isVip: false, unlockPrice: 0 },
-            { id: 2, x: 920, y: 350, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 200 },
-            { id: 3, x: 700, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 500 },
-            { id: 4, x: 920, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 1000 },
+      this.tables = [
+            // SẢNH CHÍNH
+            { id: 1, x: 700, y: 350, status: 'EMPTY', isLocked: false, isVip: false, unlockPrice: 0, seatOffsetX: 0, seatOffsetY: -30 },
+            { id: 2, x: 920, y: 350, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 200, seatOffsetX: 0, seatOffsetY: -30 },
+            { id: 3, x: 700, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 500, seatOffsetX: 0, seatOffsetY: -30 },
+            { id: 4, x: 920, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 1000, seatOffsetX: 0, seatOffsetY: -30 },
             
-            // PHÒNG VIP (Khu vực phải: X khoảng 1150 - 1500)
-            { id: 5, x: 1250, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 2000 },
-            { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000 }
+            // PHÒNG VIP
+            { id: 5, x: 1250, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 2000, seatOffsetX: 0, seatOffsetY: 25 },
+            { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25 }
         ];
 
         // ==========================================
@@ -130,35 +130,23 @@ class GameScene extends Phaser.Scene {
             this.tableSprites[tableData.id] = { bg: tableSprite, text: statusText };
 
             // CHỈ SỬ DỤNG DUY NHẤT 1 SỰ KIỆN POINTERUP ĐỒNG BỘ
-            tableSprite.on('pointerup', () => {
+          tableSprite.on('pointerup', () => {
                 if (this.isDragging) return;
 
+                // 1. CLICK ĐỂ MỞ KHÓA BÀN (NẾU BÀN ĐANG KHÓA)
                 if (tableData.isLocked) {
                     this.cameras.main.shake(100, 0.005);
+                    console.log(`Cần ${tableData.unlockPrice} Vàng để mở bàn này!`);
                     return;
                 }
 
+                // 2. TÌM KHÁCH ĐANG NGỒI (NẾU CÓ)
                 let seatedCustomer = this.customers.find(c => c.assignedTableId === tableData.id);
                 if (!seatedCustomer) return;
 
-                // KHÁCH ĐANG ĐỢI GỌI MÓN -> NHẬN ORDER
-                if (seatedCustomer.state === 'SIT_ORDERING') {
-                    seatedCustomer.state = 'WAITING_FOR_FOOD'; 
-                    
-                    if (seatedCustomer.bubbleTxt) {
-                        seatedCustomer.bubbleTxt.setText('⏳ Đang nấu...');
-                        seatedCustomer.bubbleBg.setFillStyle(0xf1c40f);
-                    }
-
-                    // PUSH ĐẦY ĐỦ DATA (ĐỂ BẾP ĐỌC ĐƯỢC COLOR VÀ COOKTIME)
-                    this.pendingOrders.push({
-                        customerRef: seatedCustomer,
-                        recipe: seatedCustomer.order.req,
-                        fullOrderData: seatedCustomer.order // <--- Gửi kèm cấu hình món lẩu sang cho Bếp
-                    });
-                    
-                    this.refreshStovesIndicator(); // Báo hiệu cho Bếp nhấp nháy
-                }
+                // Ở đây chúng ta tạm thời để trống. 
+                // Khi khách ăn xong (Trạng thái 'DONE_EATING'), người chơi sẽ click vào bàn này để dọn bát đĩa bẩn.
+                // Chúng ta sẽ viết logic dọn bàn ở Giai đoạn tiếp theo.
             });
         });
 
@@ -564,18 +552,16 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-   spawnCustomer() {
+  spawnCustomer() {
         if (this.waitingQueue.length >= 5) return;
 
-        // 1. CHỌN NGẪU NHIÊN BỘ ẢNH KHÁCH HÀNG
         let custType = Phaser.Math.Between(1, 2) === 1 ? 'cust1' : 'cust2';
         
-        // Mặc định đẻ ra là đứng nhìn xuống (_down)
         let customer = this.add.sprite(this.queueStartX, this.queueStartY, `${custType}_down`)
             .setDisplaySize(50, 80)
             .setDepth(4000);
         
-        customer.custType = custType; // Lưu lại bộ ảnh để đổi sau này
+        customer.custType = custType; 
         customer.state = 'SPAWN'; 
         customer.assignedTableId = null; 
         this.customers.push(customer);
@@ -587,13 +573,8 @@ class GameScene extends Phaser.Scene {
             customer.assignedTableId = emptyTable.id;
             customer.state = 'WALKING_TO_TABLE';
 
-            // ==========================================
-            // KỊCH BẢN ĐI 4 BƯỚC CÓ ĐỔI HƯỚNG VÀ NGỒI
-            // ==========================================
-            
-            // BƯỚC 1: Xếp hàng xong rẽ phải đi đến cửa Ngoài trời
             customer.setTexture(`${customer.custType}_side`); 
-            customer.setFlipX(false); // Mặt quay sang phải
+            customer.setFlipX(false); 
 
             this.tweens.add({
                 targets: customer,
@@ -602,88 +583,101 @@ class GameScene extends Phaser.Scene {
                 duration: 1000,
                 ease: 'Linear',
                 onComplete: () => {
-                    // BƯỚC 2: Bước qua Cửa (Teleport vào trong)
-                    customer.setPosition(this.doorInsideX, this.doorInsideY);
+                    // =======================================================
+                    // MẸO 1MS: CHỜ 1 KHUNG HÌNH ĐỂ GIẢI PHÓNG HOÀN TOÀN TWEEN CŨ
+                    // =======================================================
+                    this.time.delayedCall(1, () => {
+                        customer.setPosition(this.doorInsideX, this.doorInsideY);
+                        customer.setTexture(`${customer.custType}_down`); 
 
-                    // BƯỚC 3: Đi thẳng dọc Hành lang giữa (Mặt hướng lên/xuống)
-                    customer.setTexture(`${customer.custType}_down`); 
-
-                    this.tweens.add({
-                        targets: customer,
-                        y: emptyTable.y + 40,
-                        duration: 1500,
-                        ease: 'Linear',
-                        onComplete: () => {
-                            // BƯỚC 4: Rẽ ngang vào bàn ăn
-                            customer.setTexture(`${customer.custType}_side`); 
-                            
-                            // Nếu bàn nằm bên TRÁI hành lang -> Lật mặt sang Trái
-                            if (emptyTable.x < this.hallwayX) {
-                                customer.setFlipX(true); 
-                            } else {
-                                customer.setFlipX(false); // Bàn bên Phải -> Quay sang Phải
-                            }
-
-                            this.tweens.add({
-                                targets: customer,
-                                x: emptyTable.x,
-                                duration: 800,
-                                ease: 'Linear',
-                                onComplete: () => {
-                                    // ==========================================
-                                    // BƯỚC 5: ĐÃ ĐẾN BÀN! CHUYỂN SANG ẢNH NGỒI
-                                    // ==========================================
-                                    customer.setTexture(`${customer.custType}_sit`);
-                                    
-                                    // Lật lại ảnh gốc vì mặt ghế xoay cố định
+                        // BƯỚC 3: Đi thẳng dọc Hành lang giữa
+                        this.tweens.add({
+                            targets: customer,
+                            y: emptyTable.y + emptyTable.seatOffsetY,
+                            duration: 1500,
+                            ease: 'Linear',
+                            onComplete: () => {
+                                // BƯỚC 4: Rẽ ngang vào bàn ăn
+                                customer.setTexture(`${customer.custType}_side`); 
+                                if (emptyTable.x < this.hallwayX) {
+                                    customer.setFlipX(true); 
+                                } else {
                                     customer.setFlipX(false); 
-                                    
-                                    // Nâng khách lên một chút cho khớp với mặt ghế (Tùy chỉnh Y)
-                                    customer.y -= 15; 
-                                    
-                                    customer.state = 'SIT_ORDERING'; 
-                                    this.showOrderBubble(customer); 
                                 }
-                            });
-                        }
+
+                                this.tweens.add({
+                                    targets: customer,
+                                    x: emptyTable.x + emptyTable.seatOffsetX,
+                                    duration: 800,
+                                    ease: 'Linear',
+                                    onComplete: () => {
+                                        // BƯỚC 5: ĐÃ ĐẾN GHẾ! Đổi ảnh ngồi
+                                        customer.setTexture(`${customer.custType}_sit`);
+                                        customer.setFlipX(false); 
+                                        
+                                        customer.state = 'SIT_ORDERING'; 
+                                        this.showOrderBubble(customer); 
+                                    }
+                                });
+                            }
+                        });
                     });
                 }
             });
 
         } else {
-            // HẾT BÀN: Cho vào mảng Đợi và xếp hàng ngoài trời
-            customer.setTexture(`${customer.custType}_down`); // Đứng xếp hàng nhìn xuống
+            customer.setTexture(`${customer.custType}_down`); 
             customer.state = 'WAITING_OUTSIDE';
             this.waitingQueue.push(customer);
             this.updateQueuePositions(); 
         }
     }
 
-    showOrderBubble(customer) {
-        // Bảng Menu (Theo GDD)
-     // Cập nhật thực đơn gán kèm Texture Key của ảnh
+   showOrderBubble(customer) {
         let menu = [
             { id: 'spicy', name: '🌶️ Lẩu Cay', price: 60, cookTime: 4000, textureKey: 'pot_spicy', req: { chili: 1, beef: 2, veggies: 1 } },
             { id: 'herbal', name: '🌿 Lẩu Nấm', price: 40, cookTime: 3000, textureKey: 'pot_herbal', req: { herbs: 1, veggies: 2 } },
             { id: 'seafood', name: '🍤 Lẩu Hải Sản', price: 110, cookTime: 6000, textureKey: 'pot_seafood', req: { bone: 1, seafood: 2, veggies: 1 } }
         ];
 
-        // Khách chọn ngẫu nhiên 1 món
         let chosenDish = Phaser.Utils.Array.GetRandom(menu);
         customer.order = chosenDish;
 
-        // Vẽ Bong Bóng chat hiện lên đầu khách
-        customer.bubbleBg = this.add.rectangle(customer.x, customer.y - 50, 100, 30, 0xffffff).setStrokeStyle(2, 0x000).setDepth(4001);
-        customer.bubbleTxt = this.add.text(customer.x, customer.y - 50, chosenDish.name, { font: 'bold 12px Arial', fill: '#000' }).setOrigin(0.5).setDepth(4002);
+        // 1. VẼ BONG BÓNG VÀ BIẾN NÓ THÀNH NÚT BẤM CẢM ỨNG (setInteractive)
+        customer.bubbleBg = this.add.rectangle(customer.x, customer.y - 60, 110, 35, 0xffffff)
+            .setStrokeStyle(2, 0x000000)
+            .setDepth(4001)
+            .setInteractive({ useHandCursor: true }); // <--- BIẾN THÀNH NÚT CLICK
 
-        // Chuyển trạng thái sang Đang Chờ Phục Vụ
-        // customer.state = 'WAITING_FOR_FOOD';
+        customer.bubbleTxt = this.add.text(customer.x, customer.y - 60, chosenDish.name, { 
+            font: 'bold 12px Arial', fill: '#000000' 
+        }).setOrigin(0.5).setDepth(4002);
 
-        // Đẩy yêu cầu món ăn này vào Hàng Đợi (Job Queue) để Tí nữa Nhân Viên Bếp nấu! (Sẽ làm ở GĐ 4)
-        // Hiện tại tạm thời tự động phục vụ sau 3 giây để test loop Khách Hàng.
-        // this.time.delayedCall(3000, () => {
-        //     this.serveFoodToCustomer(customer);
-        // });
+        // Chuyển trạng thái Khách sang đang ngồi chờ gọi món
+        customer.state = 'SIT_ORDERING';
+
+        // 2. BẮT SỰ KIỆN CLICK TRỰC TIẾP VÀO BONG BÓNG ĐỂ LẤY ORDER
+        customer.bubbleBg.on('pointerup', () => {
+            if (this.isDragging) return; // Đang vuốt màn hình thì bỏ qua
+
+            if (customer.state === 'SIT_ORDERING') {
+                customer.state = 'WAITING_FOR_FOOD';
+
+                // Đổi giao diện bong bóng sang màu vàng (Đang nấu)
+                customer.bubbleTxt.setText('⏳ Đang nấu...');
+                customer.bubbleBg.setFillStyle(0xf1c40f);
+
+                // Đẩy đơn vào Bếp
+                this.pendingOrders.push({
+                    customerRef: customer,
+                    recipe: customer.order.req,
+                    fullOrderData: customer.order
+                });
+
+                this.refreshStovesIndicator(); // Báo hiệu bếp nhấp nháy
+                console.log(`Đã nhận đơn: ${chosenDish.name}!`);
+            }
+        });
     }
 
    serveFoodToCustomer(customer, potTextureKey) {
@@ -702,7 +696,7 @@ class GameScene extends Phaser.Scene {
         // =======================================================
         // Nếu muốn nồi lẩu xê dịch so với tâm cái bàn, cậu chỉnh 2 con số này:
         let hotpotOffsetX = 0;   // Dịch sang phải (+) hoặc sang trái (-)
-        let hotpotOffsetY = -15; // Dịch lên trên (-) hoặc xuống dưới (+)
+        let hotpotOffsetY = -110; // Dịch lên trên (-) hoặc xuống dưới (+)
         // =======================================================
 
         let potX = table.x + hotpotOffsetX;
@@ -753,7 +747,7 @@ class GameScene extends Phaser.Scene {
             this.customers = this.customers.filter(c => c !== customer);
             customer.destroy();
 
-            // GỌI KHÁCH TIẾP THEO Ở NGOÀI TRỜI VÀO (Giữ nguyên logic cũ của cậu...)
+           // 3. GỌI KHÁCH TIẾP THEO Ở NGOÀI TRỜI VÀO
             if (this.waitingQueue.length > 0) {
                 let nextCustomer = this.waitingQueue.shift(); 
                 this.updateQueuePositions(); 
@@ -769,27 +763,29 @@ class GameScene extends Phaser.Scene {
                     duration: 1000,
                     ease: 'Linear',
                     onComplete: () => {
-                        nextCustomer.setPosition(this.doorInsideX, this.doorInsideY); 
-                        this.tweens.add({
-                            targets: nextCustomer,
-                            y: table.y + 40, 
-                            duration: 1500,
-                            ease: 'Linear',
-                            onComplete: () => {
-                                this.tweens.add({
-                                    targets: nextCustomer,
-                                    x: table.x, 
-                                    duration: 800,
-                                    ease: 'Linear',
-                                    onComplete: () => {
-                                        nextCustomer.setTexture(`${nextCustomer.custType}_sit`);
-                                        nextCustomer.setFlipX(false);
-                                        nextCustomer.y -= 15;
-                                        nextCustomer.state = 'SIT_ORDERING';
-                                        this.showOrderBubble(nextCustomer);
-                                    }
-                                });
-                            }
+                        // HOÃN 1MS ĐỂ PHÒNG THỦ LỖI TWEEN
+                        this.time.delayedCall(1, () => {
+                            nextCustomer.setPosition(this.doorInsideX, this.doorInsideY); 
+                            this.tweens.add({
+                                targets: nextCustomer,
+                                y: table.y + table.seatOffsetY, 
+                                duration: 1500,
+                                ease: 'Linear',
+                                onComplete: () => {
+                                    this.tweens.add({
+                                        targets: nextCustomer,
+                                        x: table.x + table.seatOffsetX, 
+                                        duration: 800,
+                                        ease: 'Linear',
+                                        onComplete: () => {
+                                            nextCustomer.setTexture(`${nextCustomer.custType}_sit`);
+                                            nextCustomer.setFlipX(false);
+                                            nextCustomer.state = 'SIT_ORDERING';
+                                            this.showOrderBubble(nextCustomer);
+                                        }
+                                    });
+                                }
+                            });
                         });
                     }
                 });
