@@ -30,21 +30,46 @@ class GameScene extends Phaser.Scene {
         // 2. DATA: QUẢN LÝ BÀN ĂN (ĐÃ MỞ RỘNG TỌA ĐỘ)
       this.tables = [
             // SẢNH CHÍNH
-            { id: 1, x: 700, y: 350, status: 'EMPTY', isLocked: false, isVip: false, unlockPrice: 0, seatOffsetX: 0, seatOffsetY: -30 },
-            { id: 2, x: 920, y: 350, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 200, seatOffsetX: 0, seatOffsetY: -30 },
-            { id: 3, x: 700, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 500, seatOffsetX: 0, seatOffsetY: -30 },
-            { id: 4, x: 920, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 1000, seatOffsetX: 0, seatOffsetY: -30 },
+            { id: 1, x: 700, y: 350, status: 'EMPTY', isLocked: false, isVip: false, unlockPrice: 0, seatOffsetX: 0, seatOffsetY: -30, path: [
+                    { x: 810, y: 300, dir: 'down', flipX: false }, // Mốc 1: Đi dọc hành lang giữa lên Y=375
+                    { x: 700, y: 300, dir: 'side', flipX: false }   // Mốc 2: Rẽ trái bò vào ghế bàn 1
+                ] },
+            { id: 2, x: 920, y: 350, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 200, seatOffsetX: 0, seatOffsetY: -30,
+                 path: [
+                    { x: 810, y: 300, dir: 'down', flipX: false }, // Mốc 1: Đi dọc hành lang giữa lên Y=375
+                    { x: 920, y: 300, dir: 'side', flipX: true }   // Mốc 2: Rẽ trái bò vào ghế bàn 1
+                ]
+             },
+            { id: 3, x: 700, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 500, seatOffsetX: 0, seatOffsetY: -30,
+                 path: [
+                    { x: 810, y: 625, dir: 'down', flipX: false }, // Mốc 1: Đi dọc hành lang giữa lên Y=375
+                    { x: 700, y: 625, dir: 'side', flipX: true }   // Mốc 2: Rẽ trái bò vào ghế bàn 1
+                ]
+             },
+            { id: 4, x: 920, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 1000, seatOffsetX: 0, seatOffsetY: -30,
+                 path: [
+                    { x: 810, y: 625, dir: 'down', flipX: false }, // Mốc 1: Đi dọc hành lang giữa lên Y=375
+                    { x: 920, y: 625, dir: 'side', flipX: true }   // Mốc 2: Rẽ trái bò vào ghế bàn 1
+                ]
+             },
             
             // PHÒNG VIP
             {  id: 5, x: 1250, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 2000, seatOffsetX: 0, seatOffsetY: 25,
                 path: [
-                    { x: 810, y: 550, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
-                    { x: 1120, y: 550, dir: 'side', flipX: false }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
-                    { x: 1120, y: 425, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
-                    { x: 1250, y: 425, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
+                    { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
+                    { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
+                    { x: 1350, y: 300, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
+                    { x: 1470, y: 300, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
                 ]
             },
-            { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25 }
+            { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25,
+                path: [
+                    { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
+                    { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
+                    { x: 1350, y: 300, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
+                    { x: 1470, y: 300, dir: 'side', flipX: true }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
+                ]
+             }
         ];
 
         // ==========================================
@@ -75,6 +100,20 @@ class GameScene extends Phaser.Scene {
             { id: 2, x: 150, y: 440, status: 'IDLE', currentOrder: null },
             { id: 3, x: 390, y: 440, status: 'IDLE', currentOrder: null }
         ];
+
+        // ==========================================
+        // 4. DATA: HỆ THỐNG TỰ ĐỘNG HÓA (NHÂN SỰ)
+        // ==========================================
+        this.staffPrices = {
+            dishwasher: 2000, // Robot rửa bát
+            chef: 4000,       // Đầu bếp
+            waiter: 8000      // Phục vụ
+        };
+
+        // Đọc dữ liệu xem đã mua chưa (Lưu dưới dạng 'true' / 'false' trong localStorage)
+        this.hasDishwasher = localStorage.getItem('hotpot_has_dishwasher') === 'true';
+        this.hasChef = localStorage.getItem('hotpot_has_chef') === 'true';
+        this.hasWaiter = localStorage.getItem('hotpot_has_waiter') === 'true';
 
     }
 
@@ -219,6 +258,57 @@ class GameScene extends Phaser.Scene {
         this.add.rectangle(outX, outY + 180, 450, 150, 0x000000, 0.3);
         this.add.text(outX, outY + 180, "Ghế chờ của thực khách...", { font: 'italic 20px Arial', fill: '#ccc' }).setOrigin(0.5);
 
+        // =================================================================
+        // KHÔNG GIAN 3: KHU PHỐ NÂNG CẤP (Bên phải khu ngoài trời: X = 540 -> 1080)
+        // =================================================================
+        let upgradeOutX = 810; // Tâm của khu phố mới (540 + 270)
+        let upgradeOutY = -1020;
+
+        // Ảnh nền Khu phố Nâng Cấp (Cậu tự load 'upgrade_bg' ở BootScene nhé, tạm dùng màu)
+      // Sử dụng lại ảnh 'outdoor_bg' nhưng đặt ở vị trí X = 540 (Nối tiếp với tấm thứ 1)
+        this.add.image(540, -1500, 'outdoor_bg').setOrigin(0, 0).setDisplaySize(540, 960).setDepth(0);
+       
+        // MÔ HÌNH CỬA HÀNG NÂNG CẤP (Nhấn vào để mở UI)
+        let upgradeStore;
+        
+        if (this.textures.exists('upgrade_store')) {
+            // NẾU CÓ ẢNH THẬT -> Dùng ảnh thật
+            upgradeStore = this.add.sprite(upgradeOutX, upgradeOutY-200, 'upgrade_store')
+                .setDisplaySize(280, 280) // Kích thước hiển thị của tòa nhà (Chỉnh to nhỏ ở đây)
+                .setInteractive({ useHandCursor: true });
+        } else {
+            // NẾU CHƯA LOAD ĐƯỢC ẢNH -> Trả về khối chữ nhật vàng dự phòng
+            upgradeStore = this.add.image(upgradeOutX, upgradeOutY, 'white_box')
+                .setDisplaySize(250, 200).setTint(0xf39c12).setInteractive({ useHandCursor: true });
+        }
+
+        upgradeStore.on('pointerdown', () => {
+            let currentCamX = this.cameras.main.scrollX + 270; 
+            let currentCamY = this.cameras.main.scrollY + 480;
+            this.upgradeUI.setPosition(currentCamX, currentCamY);
+            this.upgradeUI.setVisible(true);
+        });
+
+        // ==========================================
+        // MŨI TÊN CHUYỂN CẢNH (Qua lại giữa 2 khu ngoài trời)
+        // ==========================================
+        // 1. Mũi tên Phải (Ở khu Tiệm lẩu, trỏ sang Cty Nhân Sự)
+        let arrowRight = this.add.text(outX + 220, outY, "▶", { font: 'bold 50px Arial', fill: '#fff', backgroundColor: '#000' })
+            .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(100);
+            
+        arrowRight.on('pointerdown', () => {
+            // Lướt Camera sang phải (Sang khu Nhân sự)
+            this.tweens.add({ targets: this.cameras.main, scrollX: 540, duration: 300, ease: 'Sine.easeInOut' });
+        });
+
+        // 2. Mũi tên Trái (Ở Cty Nhân sự, trỏ về Tiệm Lẩu)
+        let arrowLeft = this.add.text(upgradeOutX - 220, upgradeOutY, "◀", { font: 'bold 50px Arial', fill: '#fff', backgroundColor: '#000' })
+            .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(100);
+
+        arrowLeft.on('pointerdown', () => {
+            // Lướt Camera về lại khu Tiệm lẩu ban đầu
+            this.tweens.add({ targets: this.cameras.main, scrollX: 0, duration: 300, ease: 'Sine.easeInOut' });
+        });
 
       // ==========================================
         // 4. HỆ THỐNG KÉO VUỐT CAMERA (ĐÃ FIX LỖI CLICK)
@@ -269,6 +359,7 @@ class GameScene extends Phaser.Scene {
 
         // KHỞI TẠO GIAO DIỆN CỬA HÀNG (ẨN MẶC ĐỊNH)
         this.createShopUI();
+        this.createUpgradeUI(); // Thêm dòng này
 
 // ==========================================
         // GIAI ĐOẠN 3: KHỞI TẠO MÁY TRẠNG THÁI KHÁCH HÀNG
@@ -328,18 +419,54 @@ class GameScene extends Phaser.Scene {
             });
         });
 
+        // ==========================================
+        // VẼ ĐẦU BẾP TỰ ĐỘNG (CHỈ HIỆN KHI ĐÃ MUA)
+        // ==========================================
+        // Tọa độ chờ (Đứng giữa phòng bếp)
+        this.chefStandbyX = 270; 
+        this.chefStandbyY = 480;
+        
+        this.chefSprite = this.add.sprite(this.chefStandbyX, this.chefStandbyY, 'chef_down')
+            .setDisplaySize(60, 90)
+            .setDepth(18) // Cho đứng trên bếp một chút
+            .setVisible(this.hasChef);
+        
+        this.chefState = 'IDLE'; // Cờ trạng thái: Đang Rảnh / Đang Đi / Đang Nấu
+        
+        // Khởi động AI quét đơn hàng
+        this.runChefAI();
+
        
 
        // =================================================================
         // KHU VỰC BỒN RỬA CHÉN THỦ CÔNG (ĐỒNG BỘ NÚT BẤM VÀ ĐỒ HỌA)
         // =================================================================
-        this.sinkX = 120; // Cậu chỉ cần chỉnh tọa độ x, y duy nhất tại đây!
-        this.sinkY = 780;
+        this.sinkX = 270; // Cậu chỉ cần chỉnh tọa độ x, y duy nhất tại đây!
+        this.sinkY = 105;
         this.isWashing = false; 
+
+            // ==========================================
+        this.dishwasherSprite = this.add.sprite(this.sinkX + 90, this.sinkY - 10, 'dishwasher')
+            .setDisplaySize(60, 70)
+            .setDepth(14)
+            .setVisible(this.hasDishwasher); // Ẩn nếu chưa mua
+
+        // Tạo một Tween Rung nhè nhẹ cho Máy rửa bát (Chưa chạy vội)
+        this.dishwasherShakeTween = this.tweens.add({
+            targets: this.dishwasherSprite,
+            x: this.dishwasherSprite.x + 2,
+            yoyo: true,
+            repeat: -1,
+            duration: 50,
+            paused: true // Đóng băng, chỉ chạy khi có bát bẩn
+        });
+
+        // Bắt đầu vòng lặp AI tự động kiểm tra và rửa bát
+        this.runDishwasherAI();
 
         // 1. Sprite bát đĩa bẩn (Hợp nhất Đồ họa và Nút bấm bằng cách setInteractive)
         this.dirtyDishesSprite = this.add.sprite(this.sinkX, this.sinkY - 10, 'sink_dirty')
-            .setDisplaySize(100, 80) // Tự do đổi kích thước ảnh, vùng click sẽ tự co dãn theo!
+            .setDisplaySize(190,155) // Tự do đổi kích thước ảnh, vùng click sẽ tự co dãn theo!
             .setDepth(15)
             .setInteractive({ useHandCursor: true }) // <--- BIẾN ẢNH BÁT BẨN THÀNH NÚT BẤM
             .setVisible(false);
@@ -1044,7 +1171,7 @@ class GameScene extends Phaser.Scene {
 
         // 2. Tính toán thời gian di chuyển dựa trên khoảng cách thực tế (giúp tốc độ đi đều đặn)
         let distance = Phaser.Math.Distance.Between(customer.x, customer.y, nextPoint.x, nextPoint.y);
-        let speed = 150; // Tốc độ đi bộ: 150 pixel / giây
+        let speed = 250; // Tốc độ đi bộ: 250 pixel / giây
         let duration = (distance / speed) * 1000;
 
         // 3. Thực hiện bước đi tới điểm mốc tiếp theo
@@ -1061,4 +1188,199 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    createUpgradeUI() {
+        this.upgradeUI = this.add.container(0, 0).setDepth(20000).setVisible(false);
+        let overlay = this.add.rectangle(0, 0, 3000, 3000, 0x000000, 0.8).setInteractive();
+        let panel = this.add.rectangle(0, 0, 450, 600, 0xffffff).setStrokeStyle(4, 0xf39c12);
+        let title = this.add.text(0, -250, "🤝 TUYỂN DỤNG NHÂN SỰ", { font: 'bold 26px Arial', fill: '#d35400' }).setOrigin(0.5);
+        this.upgradeUI.add([overlay, panel, title]);
+
+        // Danh sách Nhân sự
+        let staffList = [
+            { key: 'dishwasher', name: '🤖 Máy Rửa Bát', desc: 'Tự động rửa bát bẩn\nNgăn quá tải bồn rửa', price: this.staffPrices.dishwasher },
+            { key: 'chef', name: '👨‍🍳 Đầu Bếp', desc: 'Tự động nấu Lẩu\nKhi có Đơn gọi món', price: this.staffPrices.chef },
+            { key: 'waiter', name: '💁‍♀️ Phục Vụ Bàn', desc: 'Tự động lấy Order\nvà bưng Lẩu cho khách', price: this.staffPrices.waiter }
+        ];
+
+        staffList.forEach((staff, index) => {
+            let startY = -120 + (index * 140);
+
+            // Khung từng người
+            let itemBg = this.add.rectangle(0, startY, 400, 120, 0xecf0f1).setStrokeStyle(2, 0xbdc3c7);
+            let nameTxt = this.add.text(-180, startY - 30, staff.name, { font: 'bold 20px Arial', fill: '#2c3e50' }).setOrigin(0, 0.5);
+            let descTxt = this.add.text(-180, startY + 10, staff.desc, { font: '16px Arial', fill: '#7f8c8d' }).setOrigin(0, 0.5);
+
+            // Biến cờ kiểm tra xem đã mua chưa
+            let isOwned = false;
+            if (staff.key === 'dishwasher') isOwned = this.hasDishwasher;
+            if (staff.key === 'chef') isOwned = this.hasChef;
+            if (staff.key === 'waiter') isOwned = this.hasWaiter;
+
+            // Nút Bấm Mua
+            let buyBtn = this.add.rectangle(120, startY, 130, 50, isOwned ? 0x95a5a6 : 0x27ae60).setInteractive({ useHandCursor: !isOwned });
+            let buyTxt = this.add.text(120, startY, isOwned ? "ĐÃ THUÊ" : `🪙 ${staff.price}`, { font: 'bold 18px Arial', fill: '#fff' }).setOrigin(0.5);
+
+            buyBtn.on('pointerdown', () => {
+                if (isOwned) return; // Mua rồi thì thôi
+                
+                if (this.gold >= staff.price) {
+                    // Trừ tiền
+                    this.gold -= staff.price;
+                    localStorage.setItem('hotpot_gold', this.gold.toString());
+                    this.goldText.setText(`🪙 ${this.gold}`);
+
+                    // Lưu trạng thái đã mua
+                    if (staff.key === 'dishwasher') { 
+                     this.hasDishwasher = true; 
+                     localStorage.setItem('hotpot_has_dishwasher', 'true'); 
+                     this.dishwasherSprite.setVisible(true); // <--- LÀM CHO MÁY HIỆN HÌNH NGAY LẬP TỨC
+                    }
+                   if (staff.key === 'chef') { 
+                    this.hasChef = true; 
+                      localStorage.setItem('hotpot_has_chef', 'true'); 
+                         this.chefSprite.setVisible(true); // <--- LÀM ĐẦU BẾP HIỆN HÌNH NGAY
+                        }
+                    if (staff.key === 'waiter') { this.hasWaiter = true; localStorage.setItem('hotpot_has_waiter', 'true'); }
+
+                    // Cập nhật UI Nút bấm
+                    isOwned = true;
+                    buyBtn.setFillStyle(0x95a5a6);
+                    buyTxt.setText("ĐÃ THUÊ");
+                    buyBtn.disableInteractive();
+
+                    this.showNotification(`Tuyển thành công ${staff.name}!`);
+                    
+                    // SPAWN NHÂN VIÊN RA BẢN ĐỒ (Sẽ làm ở Giai đoạn sau)
+                    this.spawnStaffSprite(staff.key); 
+
+                } else {
+                    this.showNotification("Bạn không đủ Vàng!");
+                }
+            });
+
+            this.upgradeUI.add([itemBg, nameTxt, descTxt, buyBtn, buyTxt]);
+        });
+
+        // Nút Đóng
+        let closeBtn = this.add.rectangle(180, -260, 40, 40, 0xe74c3c).setInteractive({ useHandCursor: true });
+        let closeTxt = this.add.text(180, -260, "X", { font: 'bold 20px Arial', fill: '#fff' }).setOrigin(0.5);
+        closeBtn.on('pointerdown', () => { this.upgradeUI.setVisible(false); });
+        this.upgradeUI.add([closeBtn, closeTxt]);
+    }
+
+    // Hàm tạo Sprite hiển thị dưới đất khi vừa mua xong
+    spawnStaffSprite(staffType) {
+        console.log("Đã xuất hiện nhân sự:", staffType);
+        // Ta sẽ vẽ Sprite vào Bếp / Sảnh ở bước viết AI sau
+    }
+
+    runDishwasherAI() {
+        // AI sẽ chạy một vòng lặp quét (Heartbeat) cứ mỗi 2.5 giây một lần
+        this.time.addEvent({
+            delay: 2500, // Tốc độ xử lý của Máy rửa bát (Nhanh hơn người chơi bấm tay 1 chút)
+            callback: () => {
+                // Điều kiện dừng: Nếu chưa mua máy, hoặc đang không có bát bẩn, hoặc người chơi đang rửa tay -> Bỏ qua nhịp này
+                if (!this.hasDishwasher || this.dirtyDishes <= 0 || this.isWashing) {
+                    this.dishwasherShakeTween.pause(); // Máy ngừng rung
+                    return;
+                }
+
+                // TIẾN HÀNH RỬA TỰ ĐỘNG
+                this.isWashing = true; // Khóa không cho người chơi click chen ngang
+                this.dishwasherShakeTween.resume(); // Bật máy rung ầm ầm
+
+                // Tự động bật thanh Loading xanh dương ở trên Bồn rửa bát
+                this.washBg.setVisible(true);
+                this.washFill.setVisible(true).width = 0;
+
+                this.tweens.add({
+                    targets: this.washFill,
+                    width: 80,
+                    duration: 2000, // Máy mất 2 giây để rửa sạch 1 cái đĩa
+                    onComplete: () => {
+                        this.dirtyDishes--; 
+                        this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
+                        
+                        if (this.dirtyDishes === 0) {
+                            this.dirtyDishesSprite.setVisible(false);
+                        }
+
+                        this.washBg.setVisible(false);
+                        this.washFill.setVisible(false);
+                        this.isWashing = false; // Nhả khóa ra
+
+                        this.dishwasherShakeTween.pause(); // Rửa xong tắt rung máy
+                    }
+                });
+            },
+            callbackScope: this,
+            loop: true
+        });
+    }
+
+    runChefAI() {
+        this.time.addEvent({
+            delay: 1000, // Đầu bếp quét đơn hàng mỗi 1 giây
+            callback: () => {
+                // Điều kiện chặn: Chưa mua, đang bận đi lại, Bồn rửa đầy (Hết đĩa), hoặc Hết đơn hàng
+                if (!this.hasChef || this.chefState !== 'IDLE' || this.dirtyDishes >= 5 || this.pendingOrders.length === 0) {
+                    return;
+                }
+
+                // 1. TÌM BẾP TRỐNG GẦN NHẤT ĐỂ NẤU
+                let emptyStoveIndex = this.stoves.findIndex(s => s.status === 'IDLE');
+                if (emptyStoveIndex === -1) return; // Hết bếp trống thì Đầu bếp đứng im chờ
+
+                // 2. KHÓA TRẠNG THÁI: BẮT ĐẦU ĐI NẤU
+                this.chefState = 'MOVING_TO_STOVE';
+                let targetStove = this.stoves[emptyStoveIndex];
+
+                // Xác định hướng đổi ảnh (Đang đứng giữa phòng, nếu Bếp nằm trên thì nhìn Lên, nếu dưới thì nhìn Xuống)
+                if (targetStove.y < this.chefStandbyY) {
+                    this.chefSprite.setTexture('chef_up');
+                } else {
+                    this.chefSprite.setTexture('chef_down');
+                }
+
+                // Tính toán Tween đi thẳng đến Bếp
+                let distance = Phaser.Math.Distance.Between(this.chefSprite.x, this.chefSprite.y, targetStove.x, targetStove.y);
+                let duration = (distance / 200) * 1000; // Tốc độ Đầu bếp: 200px/s
+
+                this.tweens.add({
+                    targets: this.chefSprite,
+                    x: targetStove.x,
+                    y: targetStove.y + 30, // Đứng hơi lệch xuống dưới cái bếp một tí để thao tác
+                    duration: duration,
+                    ease: 'Sine.easeInOut',
+                    onComplete: () => {
+                        // 3. ĐẾN BẾP -> TIẾN HÀNH THAO TÁC NẤU (Như người chơi Click)
+                        // Bật hoạt ảnh đứng nhìn thẳng vào nồi
+                        this.chefSprite.setTexture('chef_up'); 
+                        
+                        // Kích hoạt hàm xử lý nấu lẩu y hệt như khi bấm tay
+                        // (Lưu ý: Hàm handleStoveClick có lệnh return nếu thiếu đồ, Đầu bếp AI sẽ tự dừng)
+                        this.handleStoveClick(emptyStoveIndex); 
+                        
+                        // 4. QUAY VỀ VỊ TRÍ CHỜ (Hoặc tìm bếp khác ở nhịp quét sau)
+                        this.chefState = 'RETURNING';
+                        this.chefSprite.setTexture('chef_down'); // Quay mặt đi về
+                        
+                        this.tweens.add({
+                            targets: this.chefSprite,
+                            x: this.chefStandbyX,
+                            y: this.chefStandbyY,
+                            duration: duration,
+                            ease: 'Sine.easeInOut',
+                            onComplete: () => {
+                                this.chefState = 'IDLE'; // Rảnh rỗi trở lại, sẵn sàng quét đơn mới
+                            }
+                        });
+                    }
+                });
+            },
+            callbackScope: this,
+            loop: true
+        });
+    }
+    
 }

@@ -23,13 +23,17 @@ class BootScene extends Phaser.Scene {
         this.load.image('cust2_down', 'cust2_down.png'); 
         this.load.image('cust2_side', 'cust2_side.png'); 
         this.load.image('cust2_sit', 'cust2_sit.png');
+
+        this.load.image('chef_down', 'chef_down.png'); 
+        this.load.image('chef_side', 'chef_side.png'); 
+        this.load.image('chef_up', 'chef_up.png');
         
         this.load.image('outdoor_bg', 'outdoor_bg.png'); // Ảnh nền Mặt Tiền Quán
         
         // Cửa hàng nguyên liệu và Tiệm lẩu mini
         this.load.image('mini_store', 'mini_store.png'); 
         this.load.image('mini_hotpot', 'mini_hotpot.png');
-
+     this.load.image('upgrade_store', 'upgrade_store.png');
         // TẢI ẢNH 3 LOẠI NỒI LẨU THỰC TẾ
         this.load.image('pot_spicy', 'pot_spicy.png');     // Ảnh lẩu cay
         this.load.image('pot_herbal', 'pot_herbal.png');   // Ảnh lẩu nấm
@@ -37,6 +41,9 @@ class BootScene extends Phaser.Scene {
 
         this.load.image('sink_dirty', 'sink_dirty.png');     // Ảnh bát đĩa bẩn trong bồn
         this.load.image('angry_bubble', 'angry_bubble.png'); // Icon tức giận 💢
+
+        this.load.image('dishwasher', 'dishwasher.png');
+
     }
 
     create() {
