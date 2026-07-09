@@ -36,7 +36,14 @@ class GameScene extends Phaser.Scene {
             { id: 4, x: 920, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 1000, seatOffsetX: 0, seatOffsetY: -30 },
             
             // PHÒNG VIP
-            { id: 5, x: 1250, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 2000, seatOffsetX: 0, seatOffsetY: 25 },
+            {  id: 5, x: 1250, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 2000, seatOffsetX: 0, seatOffsetY: 25,
+                path: [
+                    { x: 810, y: 550, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
+                    { x: 1120, y: 550, dir: 'side', flipX: false }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
+                    { x: 1120, y: 425, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
+                    { x: 1250, y: 425, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
+                ]
+            },
             { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25 }
         ];
 
@@ -645,11 +652,12 @@ class GameScene extends Phaser.Scene {
 
         let emptyTable = this.tables.find(t => t.status === 'EMPTY');
 
-        if (emptyTable) {
+       if (emptyTable) {
             emptyTable.status = 'OCCUPIED';
             customer.assignedTableId = emptyTable.id;
             customer.state = 'WALKING_TO_TABLE';
 
+            // BƯỚC 1: Khách đứng ngoài đường đi bộ đến Cửa ngoài tiệm lẩu
             customer.setTexture(`${customer.custType}_side`); 
             customer.setFlipX(false); 
 
@@ -660,48 +668,28 @@ class GameScene extends Phaser.Scene {
                 duration: 1000,
                 ease: 'Linear',
                 onComplete: () => {
-                    // =======================================================
-                    // MẸO 1MS: CHỜ 1 KHUNG HÌNH ĐỂ GIẢI PHÓNG HOÀN TOÀN TWEEN CŨ
-                    // =======================================================
+                    // Trễ 1ms để giải phóng bộ nhớ
                     this.time.delayedCall(1, () => {
-
                         if (!customer || !customer.active) return;
 
+                        // BƯỚC 2: Teleport vào trong sảnh chính
                         customer.setPosition(this.doorInsideX, this.doorInsideY);
-                        customer.setTexture(`${customer.custType}_down`); 
 
-                        // BƯỚC 3: Đi thẳng dọc Hành lang giữa
-                        this.tweens.add({
-                            targets: customer,
-                            y: emptyTable.y + emptyTable.seatOffsetY,
-                            duration: 1500,
-                            ease: 'Linear',
-                            onComplete: () => {
-                                // BƯỚC 4: Rẽ ngang vào bàn ăn
-                                customer.setTexture(`${customer.custType}_side`); 
-                                if (emptyTable.x < this.hallwayX) {
-                                    customer.setFlipX(true); 
-                                } else {
-                                    customer.setFlipX(false); 
-                                }
+                        // =======================================================
+                        // BƯỚC 3: BẬT GPS - TỰ ĐỘNG DẪN ĐƯỜNG ĐẾN BÀN VIP/THƯỜNG
+                        // =======================================================
+                        // Copy mảng path của bàn để tránh làm hỏng mảng gốc
+                        let gpsRoute = [...emptyTable.path]; 
 
-                                this.tweens.add({
-                                    targets: customer,
-                                    x: emptyTable.x + emptyTable.seatOffsetX,
-                                    duration: 800,
-                                    ease: 'Linear',
-                                    onComplete: () => {
-                                        // BƯỚC 5: ĐÃ ĐẾN GHẾ! Đổi ảnh ngồi
-                                        customer.setTexture(`${customer.custType}_sit`);
-                                        customer.setFlipX(false); 
-                                        
-                                        customer.state = 'SIT_ORDERING'; 
-                                         this.startPatienceTimer(customer, 'SIT_ORDERING');
-                                        this.showOrderBubble(customer); 
-                                    }
-                                });
-                            }
+                        this.walkCustomerPath(customer, gpsRoute, () => {
+                            // Khi đi bộ hết các mốc GPS -> Khách ngồi xuống gọi món
+                            customer.setTexture(`${customer.custType}_sit`);
+                            customer.setFlipX(false); 
+                            customer.state = 'SIT_ORDERING'; 
+                            this.startPatienceTimer(customer, 'SIT_ORDERING'); 
+                            this.showOrderBubble(customer); 
                         });
+                        // =======================================================
                     });
                 }
             });
@@ -841,9 +829,13 @@ class GameScene extends Phaser.Scene {
             customer.destroy();
 
            // 3. GỌI KHÁCH TIẾP THEO Ở NGOÀI TRỜI VÀO
+           // =======================================================
+            // 3. GỌI KHÁCH TIẾP THEO Ở NGOÀI TRỜI VÀO (SỬ DỤNG GPS WAYPOINTS)
+            // =======================================================
             if (this.waitingQueue.length > 0) {
                 let nextCustomer = this.waitingQueue.shift(); 
 
+                // Tắt Timer giận dữ chờ xếp hàng ngoài trời
                 if (nextCustomer.patienceTimer) {
                     nextCustomer.patienceTimer.remove();
                     nextCustomer.patienceTimer = null;
@@ -855,6 +847,10 @@ class GameScene extends Phaser.Scene {
                 nextCustomer.assignedTableId = table.id;
                 nextCustomer.state = 'WALKING_TO_TABLE';
 
+                // Lật mặt sang phải để bắt đầu đi ra Cửa Ngoài Trời
+                nextCustomer.setTexture(`${nextCustomer.custType}_side`); 
+                nextCustomer.setFlipX(false); 
+
                 this.tweens.add({
                     targets: nextCustomer,
                     x: this.doorOutsideX, 
@@ -862,31 +858,24 @@ class GameScene extends Phaser.Scene {
                     duration: 1000,
                     ease: 'Linear',
                     onComplete: () => {
-                        // HOÃN 1MS ĐỂ PHÒNG THỦ LỖI TWEEN
+                        // HOÃN 1MS ĐỂ PHÒNG THỦ LỖI TWEEN TRÔI TỌA ĐỘ
                         this.time.delayedCall(1, () => {
-
                             if (!nextCustomer || !nextCustomer.active) return;
                             
+                            // Teleport vào trong sảnh chính
                             nextCustomer.setPosition(this.doorInsideX, this.doorInsideY); 
-                            this.tweens.add({
-                                targets: nextCustomer,
-                                y: table.y + table.seatOffsetY, 
-                                duration: 1500,
-                                ease: 'Linear',
-                                onComplete: () => {
-                                    this.tweens.add({
-                                        targets: nextCustomer,
-                                        x: table.x + table.seatOffsetX, 
-                                        duration: 800,
-                                        ease: 'Linear',
-                                        onComplete: () => {
-                                            nextCustomer.setTexture(`${nextCustomer.custType}_sit`);
-                                            nextCustomer.setFlipX(false);
-                                            nextCustomer.state = 'SIT_ORDERING';
-                                            this.showOrderBubble(nextCustomer);
-                                        }
-                                    });
-                                }
+                            
+                            // Copy lộ trình GPS của bàn trống này
+                            let gpsRoute = [...table.path]; 
+
+                            // Gọi bộ não Đệ quy (Recursive) tự động dắt khách theo lộ trình
+                            this.walkCustomerPath(nextCustomer, gpsRoute, () => {
+                                // Khi đi tới đích (Hết mốc GPS) -> Tự động ngồi xuống và gọi món
+                                nextCustomer.setTexture(`${nextCustomer.custType}_sit`);
+                                nextCustomer.setFlipX(false);
+                                nextCustomer.state = 'SIT_ORDERING';
+                                this.startPatienceTimer(nextCustomer, 'SIT_ORDERING'); 
+                                this.showOrderBubble(nextCustomer);
                             });
                         });
                     }
@@ -1029,6 +1018,45 @@ class GameScene extends Phaser.Scene {
                     this.activeNotification.destroy();
                     this.activeNotification = null;
                 }
+            }
+        });
+    }
+
+    walkCustomerPath(customer, path, onCompleteCallback) {
+        if (!customer || !customer.active) return;
+
+        // Nếu đã đi hết các điểm mốc -> Kích hoạt ngồi xuống ăn uống
+        if (path.length === 0) {
+            if (onCompleteCallback) onCompleteCallback();
+            return;
+        }
+
+        // Lấy điểm mốc tiếp theo ra khỏi bản đồ
+        let nextPoint = path.shift();
+
+        // 1. Tự động xoay hướng ảnh dựa theo khai báo của điểm mốc
+        if (nextPoint.dir) {
+            customer.setTexture(`${customer.custType}_${nextPoint.dir}`);
+        }
+        if (nextPoint.hasOwnProperty('flipX')) {
+            customer.setFlipX(nextPoint.flipX);
+        }
+
+        // 2. Tính toán thời gian di chuyển dựa trên khoảng cách thực tế (giúp tốc độ đi đều đặn)
+        let distance = Phaser.Math.Distance.Between(customer.x, customer.y, nextPoint.x, nextPoint.y);
+        let speed = 150; // Tốc độ đi bộ: 150 pixel / giây
+        let duration = (distance / speed) * 1000;
+
+        // 3. Thực hiện bước đi tới điểm mốc tiếp theo
+        this.tweens.add({
+            targets: customer,
+            x: nextPoint.x,
+            y: nextPoint.y,
+            duration: duration,
+            ease: 'Linear',
+            onComplete: () => {
+                // Đệ quy: Tự động bước tiếp sang điểm mốc tiếp theo sau khi tới đích điểm cũ
+                this.walkCustomerPath(customer, path, onCompleteCallback);
             }
         });
     }
