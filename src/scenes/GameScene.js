@@ -3,8 +3,7 @@ class GameScene extends Phaser.Scene {
         super('GameScene');
     }
 
-    init() {
-
+    init(data) {
         // TỌA ĐỘ ĐƯỜNG ĐI TRONG SẢNH (Waypoints)
         // 1. Cánh cửa Sảnh Chính (Nơi khách xuất hiện khi bước từ ngoài vào)
         this.doorInsideX = 810;  
@@ -13,32 +12,31 @@ class GameScene extends Phaser.Scene {
         // 2. Trục Hành Lang Giữa (Khách sẽ đi thẳng theo trục này để né bàn)
         this.hallwayX = 810;
 
-          let savedInventory = localStorage.getItem('hotpot_inventory');
+        // =======================================================
+        // 1. TỰ ĐỘNG KHỞI TẠO & TẢI KHO NGUYÊN LIỆU (PERSISTENT INVENTORY)
+        // =======================================================
+        let savedInventory = localStorage.getItem('hotpot_inventory');
         if (savedInventory === null) {
-            // Nếu chưa có (Mới chơi): Cho sẵn nguyên liệu ban đầu
-            this.inventory = { chili: 5, herbs: 5, bone: 5, beef: 10, veggies: 10, seafood: 5 };
+            // Nếu mới chơi: Cho đúng hệt số lượng ban đầu cậu quy định
+            this.inventory = {
+                chili: 5,     // Ớt (Nước cốt)
+                herbs: 5,     // Thảo mộc
+                bone: 5,      // Xương ống
+                beef: 10,     // Thịt bò (Đồ nhúng)
+                veggies: 10,  // Rau
+                seafood: 5    // Hải sản
+            };
             localStorage.setItem('hotpot_inventory', JSON.stringify(this.inventory));
         } else {
-            // Nếu đã có: Parse chuỗi JSON thành Object kho đồ
             this.inventory = JSON.parse(savedInventory);
         }
-        
-        // 1. DATA: KHO NGUYÊN LIỆU (BẾP)
-        this.inventory = {
-            chili: 5,     // Ớt (Nước cốt)
-            herbs: 5,     // Thảo mộc
-            bone: 5,      // Xương ống
-            beef: 10,     // Thịt bò (Đồ nhúng)
-            veggies: 10,  // Rau
-            seafood: 5    // Hải sản
-        };
 
         this.dirtyDishes = 0; // Bồn rửa chén
 
-        // 2. DATA: QUẢN LÝ BÀN ĂN TRONG SẢNH (STATE MACHINE)
-        // Mỗi bàn có ID, Tọa độ X/Y, Trạng thái hiện tại, và cờ nhận diện Bàn VIP
-        // 2. DATA: QUẢN LÝ BÀN ĂN (ĐÃ MỞ RỘNG TỌA ĐỘ)
-      this.tables = [
+        // =======================================================
+        // 2. KHAI BÁO BẢN ĐỒ BÀN ĂN (GIỮ 100% CẤU TRÚC ĐÃ CĂN CHỈNH)
+        // =======================================================
+        this.tables = [
             // SẢNH CHÍNH
             { id: 1, x: 700, y: 350, status: 'EMPTY', isLocked: false, isVip: false, unlockPrice: 0, seatOffsetX: 0, seatOffsetY: -30, path: [
                     { x: 810, y: 300, dir: 'down', flipX: false }, // Mốc 1: Đi dọc hành lang giữa lên Y=375
@@ -82,10 +80,32 @@ class GameScene extends Phaser.Scene {
              }
         ];
 
+        // =======================================================
+        // 2.5. ĐỒNG BỘ TRẠNG THÁI KHÓA/MỞ BÀN TỪ LOCALSTORAGE
+        // =======================================================
+        let savedUnlockedTables = localStorage.getItem('hotpot_unlocked_tables');
+        let unlockedTableIds = [1]; // Bàn 1 luôn mở mặc định
+
+        if (savedUnlockedTables === null) {
+            localStorage.setItem('hotpot_unlocked_tables', JSON.stringify(unlockedTableIds));
+        } else {
+            unlockedTableIds = JSON.parse(savedUnlockedTables);
+        }
+
+        // Ép trạng thái đã mở khóa lên bàn ăn thực tế
+        this.tables.forEach(table => {
+            if (unlockedTableIds.includes(table.id)) {
+                table.isLocked = false;
+                table.status = 'EMPTY';
+            } else {
+                table.isLocked = true;
+                table.status = 'LOCKED';
+            }
+        });
+
         // ==========================================
         // 3. DATA: DÒNG TIỀN & BẢNG GIÁ CỬA HÀNG
         // ==========================================
-        // Lấy tiền từ LocalStorage, nếu mới chơi cho sẵn 500 Vàng làm vốn
         this.gold = parseInt(localStorage.getItem('hotpot_gold')) || 500; 
 
         this.shopPrices = {
@@ -97,13 +117,10 @@ class GameScene extends Phaser.Scene {
             seafood: 20   // Hải sản
         };
 
-        // Giỏ hàng tạm thời khi đang chọn đồ trong UI
         this.cart = { chili: 0, herbs: 0, bone: 0, beef: 0, veggies: 0, seafood: 0 };
-
-        // Khai báo trong hàm init()
         this.pendingOrders = [];
 
-        // KHỞI TẠO 4 BẾP NẤU (Tọa độ X, Y giả định nằm rải rác bên khu Bếp trái)
+        // KHỞI TẠO 4 BẾP NẤU (GIỮ NGUYÊN TỌA ĐỘ CŨ)
         this.stoves = [
             { id: 0, x: 150, y: 270, status: 'IDLE', currentOrder: null },
             { id: 1, x: 390, y: 270, status: 'IDLE', currentOrder: null },
@@ -115,20 +132,18 @@ class GameScene extends Phaser.Scene {
         // 4. DATA: HỆ THỐNG TỰ ĐỘNG HÓA (NHÂN SỰ)
         // ==========================================
         this.staffPrices = {
-            dishwasher: 2000, // Robot rửa bát
-            chef: 4000,       // Đầu bếp
-            waiter: 8000      // Phục vụ
+            dishwasher: 2000, 
+            chef: 4000,       
+            waiter: 8000      
         };
 
-        // Đọc dữ liệu xem đã mua chưa (Lưu dưới dạng 'true' / 'false' trong localStorage)
         this.hasDishwasher = localStorage.getItem('hotpot_has_dishwasher') === 'true';
         this.hasChef = localStorage.getItem('hotpot_has_chef') === 'true';
         this.hasWaiter = localStorage.getItem('hotpot_has_waiter') === 'true';
 
         // Đọc xem người chơi đã hoàn thành hướng dẫn chưa
         this.tutorialDone = localStorage.getItem('hotpot_tutorial_done') === 'true';
-        this.tutorialStep = 0; // Đếm số bước hướng dẫn
-
+        this.tutorialStep = 0; 
     }
 
   create() {
@@ -205,6 +220,12 @@ class GameScene extends Phaser.Scene {
 
                         tableData.isLocked = false;
                         tableData.status = 'EMPTY';
+
+                          let unlockedTableIds = JSON.parse(localStorage.getItem('hotpot_unlocked_tables')) || [1];
+                        if (!unlockedTableIds.includes(tableData.id)) {
+                            unlockedTableIds.push(tableData.id);
+                            localStorage.setItem('hotpot_unlocked_tables', JSON.stringify(unlockedTableIds));
+                        }
 
                         // Đổi màu bàn ăn sang trắng sáng (Phản hồi thị giác)
                         let normalColor = tableData.isVip ? 0xe74c3c : 0xecf0f1;
@@ -633,6 +654,7 @@ class GameScene extends Phaser.Scene {
             // ĐỦ ĐỒ -> TRỪ KHO VÀ ĐƯA ĐƠN VÀO BẾP
             for (let item in req) { this.inventory[item] -= req[item]; }
             this.updateInventoryHUD();
+              this.saveInventory(); 
             
             stove.currentOrder = this.pendingOrders.shift(); // Lấy đơn khỏi hàng chờ
             stove.status = 'COOKING';
@@ -816,6 +838,8 @@ class GameScene extends Phaser.Scene {
                 this.cart[key] = 0; // Reset giỏ
                 this.cartTexts[key].setText("0"); // Reset UI
             }
+
+             this.saveInventory(); 
 
             // Cập nhật lại Text Kho hàng HUD
             this.updateInventoryHUD();
@@ -1891,5 +1915,9 @@ class GameScene extends Phaser.Scene {
                 });
             }
         });
+    }
+
+    saveInventory() {
+        localStorage.setItem('hotpot_inventory', JSON.stringify(this.inventory));
     }
 }
