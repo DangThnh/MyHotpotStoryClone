@@ -62,7 +62,7 @@ class GameScene extends Phaser.Scene {
              },
             
             // PHÒNG VIP
-            {  id: 5, x: 1250, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 2000, seatOffsetX: 0, seatOffsetY: 25,
+            {  id: 5, x: 1225, y: 350, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 2000, seatOffsetX: 0, seatOffsetY: 25,
                 path: [
                     { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
                     { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
@@ -70,7 +70,7 @@ class GameScene extends Phaser.Scene {
                     { x: 1230, y: 300, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
                 ]
             },
-            { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25,
+            { id: 6, x: 1475, y: 350, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25,
                 path: [
                     { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
                     { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
