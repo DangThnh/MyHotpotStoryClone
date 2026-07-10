@@ -51,7 +51,7 @@ class GameScene extends Phaser.Scene {
             { id: 3, x: 700, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 500, seatOffsetX: 0, seatOffsetY: -30,
                  path: [
                     { x: 810, y: 625, dir: 'down', flipX: false }, // Mốc 1: Đi dọc hành lang giữa lên Y=375
-                    { x: 700, y: 625, dir: 'side', flipX: true }   // Mốc 2: Rẽ trái bò vào ghế bàn 1
+                    { x: 700, y: 625, dir: 'side', flipX: false }   // Mốc 2: Rẽ trái bò vào ghế bàn 1
                 ]
              },
             { id: 4, x: 920, y: 650, status: 'LOCKED', isLocked: true, isVip: false, unlockPrice: 1000, seatOffsetX: 0, seatOffsetY: -30,
@@ -67,7 +67,7 @@ class GameScene extends Phaser.Scene {
                     { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
                     { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
                     { x: 1350, y: 300, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
-                    { x: 1470, y: 300, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
+                    { x: 1470, y: 300, dir: 'side', flipX: true }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
                 ]
             },
             { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25,
@@ -75,7 +75,7 @@ class GameScene extends Phaser.Scene {
                     { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
                     { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
                     { x: 1350, y: 300, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
-                    { x: 1470, y: 300, dir: 'side', flipX: true }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
+                    { x: 1230, y: 300, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
                 ]
              }
         ];
