@@ -13,6 +13,16 @@ class GameScene extends Phaser.Scene {
         // 2. Trục Hành Lang Giữa (Khách sẽ đi thẳng theo trục này để né bàn)
         this.hallwayX = 810;
 
+          let savedInventory = localStorage.getItem('hotpot_inventory');
+        if (savedInventory === null) {
+            // Nếu chưa có (Mới chơi): Cho sẵn nguyên liệu ban đầu
+            this.inventory = { chili: 5, herbs: 5, bone: 5, beef: 10, veggies: 10, seafood: 5 };
+            localStorage.setItem('hotpot_inventory', JSON.stringify(this.inventory));
+        } else {
+            // Nếu đã có: Parse chuỗi JSON thành Object kho đồ
+            this.inventory = JSON.parse(savedInventory);
+        }
+        
         // 1. DATA: KHO NGUYÊN LIỆU (BẾP)
         this.inventory = {
             chili: 5,     // Ớt (Nước cốt)
@@ -115,6 +125,10 @@ class GameScene extends Phaser.Scene {
         this.hasChef = localStorage.getItem('hotpot_has_chef') === 'true';
         this.hasWaiter = localStorage.getItem('hotpot_has_waiter') === 'true';
 
+        // Đọc xem người chơi đã hoàn thành hướng dẫn chưa
+        this.tutorialDone = localStorage.getItem('hotpot_tutorial_done') === 'true';
+        this.tutorialStep = 0; // Đếm số bước hướng dẫn
+
     }
 
   create() {
@@ -142,11 +156,12 @@ class GameScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true })
             .setDepth(100);
             
-        this.add.text(810, 880, "🚪 RA NGOÀI TRỜI", { font: 'bold 18px Arial', fill: '#fff' })
+        this.add.text(810, 880, "🚪 RA NGOÀI", { font: 'bold 18px Arial', fill: '#fff' })
             .setOrigin(0.5)
             .setDepth(101);
         
         doorToOutside.on('pointerdown', () => {
+            if (!this.tutorialDone) return;
             this.cameras.main.scrollX = 0;
             this.cameras.main.scrollY = -1500;
         });
@@ -177,6 +192,7 @@ class GameScene extends Phaser.Scene {
 
             // CHỈ SỬ DỤNG DUY NHẤT 1 SỰ KIỆN POINTERUP ĐỒNG BỘ
           tableSprite.on('pointerup', () => {
+            if (!this.tutorialDone) return;
                 if (this.isDragging) return;
 
               // 1. CLICK ĐỂ MỞ KHÓA BÀN MỚI
@@ -318,6 +334,8 @@ class GameScene extends Phaser.Scene {
         this.camStartX = 0;
 
         this.input.on('pointerdown', (pointer) => {
+             if (!this.tutorialDone && this.tutorialStep !== 2) return;
+
             if (this.cameras.main.scrollY === 0) {
                 this.isDragging = false; // Mới chạm vào, CHƯA TÍNH LÀ VUỐT
                 this.dragStartX = pointer.x;
@@ -326,6 +344,7 @@ class GameScene extends Phaser.Scene {
         });
 
         this.input.on('pointermove', (pointer) => {
+             if (!this.tutorialDone && this.tutorialStep !== 2) return;
             if (pointer.isDown && this.cameras.main.scrollY === 0) {
                 // CHÌ TÍNH LÀ VUỐT NẾU NGÓN TAY DI CHUYỂN HƠN 5 PIXEL
                 if (Math.abs(pointer.x - this.dragStartX) > 5) {
@@ -372,12 +391,17 @@ class GameScene extends Phaser.Scene {
         this.queueStartY = -840; 
 
         // Khởi động Timer Đẻ Khách: Mỗi 5 - 8 giây đẻ 1 tốp khách (1 tốp = 1 Container hình người)
+         if (this.tutorialDone) {
         this.time.addEvent({
             delay: 6000,
             callback: this.spawnCustomer,
             callbackScope: this,
             loop: true
         });
+        } else {
+            // Nếu chưa -> Khởi động hệ thống hướng dẫn người chơi
+            this.startTutorialSystem();
+        }
 
         // =================================================================
         // KHU VỰC BẾP (BÊN TRÁI MÀN HÌNH: X=270)
@@ -427,7 +451,7 @@ class GameScene extends Phaser.Scene {
         this.chefStandbyY = 480;
         
         this.chefSprite = this.add.sprite(this.chefStandbyX, this.chefStandbyY, 'chef_down')
-            .setDisplaySize(60, 90)
+            .setDisplaySize(45, 90)
             .setDepth(18) // Cho đứng trên bếp một chút
             .setVisible(this.hasChef);
         
@@ -435,6 +459,24 @@ class GameScene extends Phaser.Scene {
         
         // Khởi động AI quét đơn hàng
         this.runChefAI();
+
+        // ==========================================
+        // VẼ PHỤC VỤ BÀN (CHỈ HIỆN KHI ĐÃ MUA)
+        // ==========================================
+        // Vị trí chờ (Đứng sát mép phải sảnh chính, gần VIP)
+        this.waitressStandbyX = 810; 
+        this.waitressStandbyY = 200;
+        
+        this.waitressSprite = this.add.sprite(this.waitressStandbyX, this.waitressStandbyY, 'waitress_down')
+            .setDisplaySize(45, 90)
+            .setDepth(4005) 
+            .setVisible(this.hasWaiter);
+        
+        this.waitressState = 'IDLE'; 
+        this.waitressSprite.custType = 'waitress'; // Để hàm walkCustomerPath lôi đúng ảnh waitress_side, waitress_down ra
+        
+        // Khởi động AI Phục vụ
+        this.runWaitressAI();
 
        
 
@@ -482,6 +524,9 @@ class GameScene extends Phaser.Scene {
 
         // BẮT SỰ KIỆN CLICK TRỰC TIẾP LÊN ẢNH BÁT ĐĨA BẨN ĐỂ RỬA CHÉN
         this.dirtyDishesSprite.on('pointerup', () => {
+
+             if (!this.tutorialDone) return;
+
             if (this.isDragging || this.isWashing) return;
 
             if (this.dirtyDishes > 0) {
@@ -527,7 +572,13 @@ class GameScene extends Phaser.Scene {
     }
 
     update() {
-        // Game quản lý dùng Event Driven, update() sẽ rất ít code
+        // KIỂM TRA LƯỚT CAMERA TRONG TUTORIAL
+        if (!this.tutorialDone && this.tutorialStep === 2) {
+            // Nếu người chơi kéo Camera sang trái (X của camera trượt về < 100 tức là đã nhìn thấy Bếp)
+            if (this.cameras.main.scrollX <= 100) {
+                this.showTutorialStep(3); // Kích hoạt Bước 3: Soi sáng bếp nấu
+            }
+        }
     }
 
     refreshStovesIndicator() {
@@ -544,6 +595,12 @@ class GameScene extends Phaser.Scene {
     }
 
     handleStoveClick(index) {
+
+        if (!this.tutorialDone) {
+            if (index !== 0) return; // Khóa 3 bếp còn lại
+            if (this.tutorialStep !== 3 && this.tutorialStep !== 4) return; // Khóa click nếu sai bước
+        }
+
         let stove = this.stoves[index];
         let vis = this.stoveVisuals[index];
 
@@ -600,6 +657,15 @@ class GameScene extends Phaser.Scene {
             // Hoạt ảnh Nồi lẩu rung lắc dập dềnh
             let boilTween = this.tweens.add({ targets: vis.pot, y: stove.y - 15, yoyo: true, repeat: -1, duration: 150 });
 
+            // SỬA ĐOẠN ĐẦU BẾP NẤU THÀNH CÔNG:
+            if (!this.tutorialDone && this.tutorialStep === 3) {
+                this.showTutorialStep(4); // Chuyển sang Bước 4: Chờ nấu chín và soi sáng duy nhất cái Bếp đang nấu
+                
+                let brush = this.add.circle(0, 0, 85, 0xffffff).setVisible(false);
+                this.rt.erase(brush, stove.x, stove.y + 2000); // Chỉ soi sáng duy nhất cái bếp này
+                brush.destroy();
+            }
+
             // Tween chạy thanh Loading theo thời gian món ăn
             this.tweens.add({
                 targets: vis.loadFill,
@@ -615,6 +681,7 @@ class GameScene extends Phaser.Scene {
                     vis.serveBubble.setVisible(true); // Bật bong bóng "BƯNG RA"
                     stove.status = 'READY_TO_SERVE';
                 }
+
             });
 
         } else if (stove.status === 'READY_TO_SERVE') {
@@ -629,6 +696,11 @@ class GameScene extends Phaser.Scene {
 
            // Truyền Key Ảnh Nồi lẩu thực tế sang cho bàn ăn của khách
             this.serveFoodToCustomer(stove.currentOrder.customerRef, stove.currentOrder.fullOrderData.textureKey);
+
+            stove.currentOrder = null;
+             if (!this.tutorialDone && this.tutorialStep === 4) {
+                this.showTutorialStep(5.1);
+            }
         }
     }
 
@@ -1149,19 +1221,17 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    walkCustomerPath(customer, path, onCompleteCallback) {
+  // Thêm tham số speed = 150 ở cuối (Mặc định là 150 nếu không truyền gì vào)
+    walkCustomerPath(customer, path, onCompleteCallback, speed = 250) { 
         if (!customer || !customer.active) return;
 
-        // Nếu đã đi hết các điểm mốc -> Kích hoạt ngồi xuống ăn uống
         if (path.length === 0) {
             if (onCompleteCallback) onCompleteCallback();
             return;
         }
 
-        // Lấy điểm mốc tiếp theo ra khỏi bản đồ
         let nextPoint = path.shift();
 
-        // 1. Tự động xoay hướng ảnh dựa theo khai báo của điểm mốc
         if (nextPoint.dir) {
             customer.setTexture(`${customer.custType}_${nextPoint.dir}`);
         }
@@ -1169,12 +1239,11 @@ class GameScene extends Phaser.Scene {
             customer.setFlipX(nextPoint.flipX);
         }
 
-        // 2. Tính toán thời gian di chuyển dựa trên khoảng cách thực tế (giúp tốc độ đi đều đặn)
         let distance = Phaser.Math.Distance.Between(customer.x, customer.y, nextPoint.x, nextPoint.y);
-        let speed = 250; // Tốc độ đi bộ: 250 pixel / giây
+        
+        // Tính duration dựa trên biến speed động
         let duration = (distance / speed) * 1000;
 
-        // 3. Thực hiện bước đi tới điểm mốc tiếp theo
         this.tweens.add({
             targets: customer,
             x: nextPoint.x,
@@ -1182,8 +1251,8 @@ class GameScene extends Phaser.Scene {
             duration: duration,
             ease: 'Linear',
             onComplete: () => {
-                // Đệ quy: Tự động bước tiếp sang điểm mốc tiếp theo sau khi tới đích điểm cũ
-                this.walkCustomerPath(customer, path, onCompleteCallback);
+                // Truyền tiếp biến speed cho các bước đệ quy tiếp theo
+                this.walkCustomerPath(customer, path, onCompleteCallback, speed);
             }
         });
     }
@@ -1240,7 +1309,9 @@ class GameScene extends Phaser.Scene {
                       localStorage.setItem('hotpot_has_chef', 'true'); 
                          this.chefSprite.setVisible(true); // <--- LÀM ĐẦU BẾP HIỆN HÌNH NGAY
                         }
-                    if (staff.key === 'waiter') { this.hasWaiter = true; localStorage.setItem('hotpot_has_waiter', 'true'); }
+                    if (staff.key === 'waiter') { this.hasWaiter = true; localStorage.setItem('hotpot_has_waiter', 'true');
+                        this.waitressSprite.setVisible(true);
+                     }
 
                     // Cập nhật UI Nút bấm
                     isOwned = true;
@@ -1318,61 +1389,116 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    runChefAI() {
+   runChefAI() {
         this.time.addEvent({
-            delay: 1000, // Đầu bếp quét đơn hàng mỗi 1 giây
+            delay: 1000, 
             callback: () => {
-                // Điều kiện chặn: Chưa mua, đang bận đi lại, Bồn rửa đầy (Hết đĩa), hoặc Hết đơn hàng
-                if (!this.hasChef || this.chefState !== 'IDLE' || this.dirtyDishes >= 5 || this.pendingOrders.length === 0) {
-                    return;
-                }
+                // Điều kiện chặn (Giữ nguyên)
+                if (!this.hasChef || this.chefState !== 'IDLE' || this.dirtyDishes >= 5 || this.pendingOrders.length === 0) return;
 
-                // 1. TÌM BẾP TRỐNG GẦN NHẤT ĐỂ NẤU
                 let emptyStoveIndex = this.stoves.findIndex(s => s.status === 'IDLE');
-                if (emptyStoveIndex === -1) return; // Hết bếp trống thì Đầu bếp đứng im chờ
+                if (emptyStoveIndex === -1) return; 
 
-                // 2. KHÓA TRẠNG THÁI: BẮT ĐẦU ĐI NẤU
+                // KHÓA TRẠNG THÁI: BẮT ĐẦU ĐI NẤU
                 this.chefState = 'MOVING_TO_STOVE';
                 let targetStove = this.stoves[emptyStoveIndex];
+                
+                // Tọa độ Đích (Đứng hơi lệch xuống dưới cái bếp một tí để thao tác)
+                let targetX = targetStove.x;
+                let targetY = targetStove.y + 40;
 
-                // Xác định hướng đổi ảnh (Đang đứng giữa phòng, nếu Bếp nằm trên thì nhìn Lên, nếu dưới thì nhìn Xuống)
-                if (targetStove.y < this.chefStandbyY) {
+                // Tốc độ Đầu bếp 
+                let speed = 200; 
+
+                // =================================================================
+                // CHẶNG ĐI (LƯỢT ĐẾN BẾP) - ĐI VUÔNG GÓC 2 BƯỚC
+                // =================================================================
+                
+                // 1. TÍNH CHẶNG ĐI DỌC (TRỤC Y)
+                let durY = (Math.abs(targetY - this.chefSprite.y) / speed) * 1000;
+                
+                // Đổi ảnh dọc: Lên hay Xuống?
+                if (targetY < this.chefSprite.y) {
                     this.chefSprite.setTexture('chef_up');
                 } else {
                     this.chefSprite.setTexture('chef_down');
                 }
 
-                // Tính toán Tween đi thẳng đến Bếp
-                let distance = Phaser.Math.Distance.Between(this.chefSprite.x, this.chefSprite.y, targetStove.x, targetStove.y);
-                let duration = (distance / 200) * 1000; // Tốc độ Đầu bếp: 200px/s
-
+                // Tween Chặng Dọc
                 this.tweens.add({
                     targets: this.chefSprite,
-                    x: targetStove.x,
-                    y: targetStove.y + 30, // Đứng hơi lệch xuống dưới cái bếp một tí để thao tác
-                    duration: duration,
-                    ease: 'Sine.easeInOut',
+                    y: targetY,
+                    duration: durY,
+                    ease: 'Linear',
                     onComplete: () => {
-                        // 3. ĐẾN BẾP -> TIẾN HÀNH THAO TÁC NẤU (Như người chơi Click)
-                        // Bật hoạt ảnh đứng nhìn thẳng vào nồi
-                        this.chefSprite.setTexture('chef_up'); 
-                        
-                        // Kích hoạt hàm xử lý nấu lẩu y hệt như khi bấm tay
-                        // (Lưu ý: Hàm handleStoveClick có lệnh return nếu thiếu đồ, Đầu bếp AI sẽ tự dừng)
-                        this.handleStoveClick(emptyStoveIndex); 
-                        
-                        // 4. QUAY VỀ VỊ TRÍ CHỜ (Hoặc tìm bếp khác ở nhịp quét sau)
-                        this.chefState = 'RETURNING';
-                        this.chefSprite.setTexture('chef_down'); // Quay mặt đi về
-                        
+                        // 2. TÍNH CHẶNG ĐI NGANG (TRỤC X) KHI ĐÃ TỚI NGANG HÀNG
+                        let durX = (Math.abs(targetX - this.chefSprite.x) / speed) * 1000;
+
+                        // Đổi ảnh ngang và Lật mặt
+                        this.chefSprite.setTexture('chef_side');
+                        if (targetX < this.chefSprite.x) {
+                            this.chefSprite.setFlipX(true); // Sang trái
+                        } else {
+                            this.chefSprite.setFlipX(false); // Sang phải
+                        }
+
+                        // Tween Chặng Ngang (Tạt vào bếp)
                         this.tweens.add({
                             targets: this.chefSprite,
-                            x: this.chefStandbyX,
-                            y: this.chefStandbyY,
-                            duration: duration,
-                            ease: 'Sine.easeInOut',
+                            x: targetX,
+                            duration: durX,
+                            ease: 'Linear',
                             onComplete: () => {
-                                this.chefState = 'IDLE'; // Rảnh rỗi trở lại, sẵn sàng quét đơn mới
+                                // ==============================================
+                                // ĐÃ ĐẾN NƠI -> BẬT BẾP NẤU!
+                                // ==============================================
+                                this.chefSprite.setTexture('chef_up'); // Đứng nhìn thẳng vào nồi
+                                this.chefSprite.setFlipX(false);
+                                
+                                this.handleStoveClick(emptyStoveIndex); 
+
+                                // ==============================================
+                                // CHẶNG VỀ (QUAY LẠI VỊ TRÍ CHỜ) - ĐI VUÔNG GÓC 2 BƯỚC
+                                // ==============================================
+                                this.chefState = 'RETURNING';
+
+                                // 1. TÍNH CHẶNG VỀ NGANG (Lùi ra giữa hành lang)
+                                let retDurX = (Math.abs(this.chefStandbyX - this.chefSprite.x) / speed) * 1000;
+                                this.chefSprite.setTexture('chef_side');
+                                if (this.chefStandbyX < this.chefSprite.x) {
+                                    this.chefSprite.setFlipX(true);
+                                } else {
+                                    this.chefSprite.setFlipX(false);
+                                }
+
+                                this.tweens.add({
+                                    targets: this.chefSprite,
+                                    x: this.chefStandbyX,
+                                    duration: retDurX,
+                                    ease: 'Linear',
+                                    onComplete: () => {
+                                        // 2. TÍNH CHẶNG VỀ DỌC (Trở về đúng tâm phòng)
+                                        let retDurY = (Math.abs(this.chefStandbyY - this.chefSprite.y) / speed) * 1000;
+                                        if (this.chefStandbyY < this.chefSprite.y) {
+                                            this.chefSprite.setTexture('chef_up');
+                                        } else {
+                                            this.chefSprite.setTexture('chef_down');
+                                        }
+                                        this.chefSprite.setFlipX(false);
+
+                                        this.tweens.add({
+                                            targets: this.chefSprite,
+                                            y: this.chefStandbyY,
+                                            duration: retDurY,
+                                            ease: 'Linear',
+                                            onComplete: () => {
+                                                // ĐÃ VỀ TỚI NHÀ, SẴN SÀNG NHẬN ĐƠN MỚI
+                                                this.chefSprite.setTexture('chef_down');
+                                                this.chefState = 'IDLE'; 
+                                            }
+                                        });
+                                    }
+                                });
                             }
                         });
                     }
@@ -1382,5 +1508,388 @@ class GameScene extends Phaser.Scene {
             loop: true
         });
     }
+
+   runWaitressAI() {
+        this.time.addEvent({
+            delay: 1000, 
+            callback: () => {
+                if (!this.hasWaiter || this.waitressState !== 'IDLE') return;
+
+                let targetTask = null;
+                let targetLocation = null;
+                let targetObject = null;
+
+                // ==============================================
+                // QUÉT TÌM VIỆC ƯU TIÊN (GIỮ NGUYÊN)
+                // ==============================================
+                let readyStoveIndex = this.stoves.findIndex(s => s.status === 'READY_TO_SERVE');
+                if (readyStoveIndex !== -1) {
+                    targetTask = 'SERVE_FOOD';
+                    targetObject = readyStoveIndex;
+                    targetLocation = { x: this.stoves[readyStoveIndex].x, y: this.stoves[readyStoveIndex].y + 40 };
+                } else {
+                    let orderingCustomer = this.customers.find(c => c.state === 'SIT_ORDERING');
+                    if (orderingCustomer) {
+                        targetTask = 'TAKE_ORDER';
+                        targetObject = orderingCustomer;
+                        let tData = this.tables.find(t => t.id === orderingCustomer.assignedTableId);
+                        targetLocation = { x: tData.x, y: tData.y + 40 }; 
+                    }
+                }
+
+                // ==============================================
+                // LẬP LỘ TRÌNH GPS NÉ TƯỜNG CHO PHỤC VỤ
+                // ==============================================
+                if (targetTask) {
+                    this.waitressState = 'WORKING';
+                    
+                    // --- CÁC NÚT TỌA ĐỘ ĐỂ CẬU TỰ ĐIỀU CHỈNH CHO KHỚP ẢNH NỀN ---
+                    let doorKitchenX = 540;  // Tọa độ X của cánh cửa thông giữa Bếp và Sảnh
+                    let doorKitchenY = 650;  // Tọa độ Y của cánh cửa thông (Thường để dưới đáy sảnh)
+                    let hallwaySanhX = 810;  // Trục dọc giữa Sảnh chính
+                    let hallwayBepX = 270;   // Trục dọc giữa Bếp
+                    // -----------------------------------------------------------
+
+                    let path = [];
+
+                    if (targetTask === 'SERVE_FOOD') {
+                        // KỊCH BẢN ĐI BẾP LẤY LẨU: Không đi xuyên tường mà chui qua Cửa Bếp
+                        // 1. Đi từ chỗ chờ xuống ngang hàng Cửa Bếp
+                        path.push({ x: hallwaySanhX, y: doorKitchenY, dir: 'down', flipX: false });
+                        // 2. Chui qua Cửa Bếp sang trục giữa Bếp
+                        path.push({ x: hallwayBepX, y: doorKitchenY, dir: 'side', flipX: true });
+                        // 3. Đi ngược lên trục dọc Bếp để ngang hàng cái Bếp cần bưng đồ
+                        path.push({ x: hallwayBepX, y: targetLocation.y, dir: 'up', flipX: false });
+                        // 4. Rẽ ngang vào mặt cái Bếp đó
+                        path.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwayBepX });
+                    } else {
+                        // KỊCH BẢN LẤY ORDER Ở SẢNH: Đi trục dọc Sảnh bình thường
+                        path.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'side', flipX: true });
+                        path.push({ x: hallwaySanhX, y: targetLocation.y, dir: targetLocation.y > this.waitressStandbyY ? 'down' : 'up', flipX: false });
+                        path.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwaySanhX });
+                    }
+
+                    // Thực thi đi tới đích
+                    this.walkCustomerPath(this.waitressSprite, path, () => {
+                        this.waitressSprite.setTexture('waitress_up'); 
+                        
+                        this.time.delayedCall(500, () => {
+                            if (targetTask === 'SERVE_FOOD') {
+                                this.handleStoveClick(targetObject);
+                            } else if (targetTask === 'TAKE_ORDER') {
+                                if (targetObject.state === 'SIT_ORDERING') {
+                                    targetObject.state = 'WAITING_FOR_FOOD';
+                                    if (targetObject.bubbleTxt) {
+                                        targetObject.bubbleTxt.setText('⏳ Đang nấu...');
+                                        targetObject.bubbleBg.setFillStyle(0xf1c40f);
+                                    }
+                                    this.pendingOrders.push({
+                                        customerRef: targetObject,
+                                        recipe: targetObject.order.req,
+                                        fullOrderData: targetObject.order 
+                                    });
+                                    this.refreshStovesIndicator();
+                                    this.startPatienceTimer(targetObject, 'WAITING_FOR_FOOD'); 
+                                }
+                            }
+
+                            // ==============================================
+                            // LỘ TRÌNH ĐI VỀ SAU KHI LÀM XONG VIỆC
+                            // ==============================================
+                            let returnPath = [];
+
+                            if (targetTask === 'SERVE_FOOD') {
+                                // Vừa lấy đồ trong Bếp xong -> Đi ngược lại chui qua cửa về Sảnh
+                                returnPath.push({ x: hallwayBepX, y: targetLocation.y, dir: 'side', flipX: hallwayBepX < targetLocation.x });
+                                returnPath.push({ x: hallwayBepX, y: doorKitchenY, dir: 'down', flipX: false });
+                                returnPath.push({ x: hallwaySanhX, y: doorKitchenY, dir: 'side', flipX: false });
+                                returnPath.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'up', flipX: false });
+                                returnPath.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
+                            } else {
+                                // Vừa lấy Order ngoài Sảnh xong -> Quay về chỗ chờ
+                                returnPath.push({ x: hallwaySanhX, y: targetLocation.y, dir: 'side', flipX: hallwaySanhX < targetLocation.x });
+                                returnPath.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: targetLocation.y > this.waitressStandbyY ? 'up' : 'down', flipX: false });
+                                returnPath.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
+                            }
+
+                            this.walkCustomerPath(this.waitressSprite, returnPath, () => {
+                                this.waitressSprite.setTexture('waitress_down');
+                                this.waitressState = 'IDLE'; 
+                            });
+                        });
+                    }, 450);
+                }
+            },
+            callbackScope: this,
+            loop: true
+        });
+    }
     
+   startTutorialSystem() {
+        let width = 540;
+        let height = 960;
+
+        // 1. TẤM KÍNH ĐEN MỜ KHỔNG LỒ (RenderTexture)
+        this.rt = this.add.renderTexture(0, -2000, 1620, 2960).setDepth(999900); // Đẩy lên 999k
+        this.rt.fill(0x000000, 0.75);
+
+        // 2. VẼ PHẲNG BẢNG CHÁT (KHÔNG DÙNG CONTAINER)
+        let panelX = 380; // Đẩy bảng sang mép phải
+        let panelY = 480;
+
+        // Khung nền xám
+        this.tutBg = this.add.rectangle(panelX, panelY, 260, 400, 0x1a1a1a)
+            .setStrokeStyle(3, 0xf1c40f)
+            .setScrollFactor(0)
+            .setDepth(999990); // Depth 999.990
+
+        // Text hướng dẫn (Nằm lọt lòng khung)
+        this.tutText = this.add.text(265, 310, "", { 
+            font: 'bold 16px Arial', fill: '#ffffff', wordWrap: { width: 230, useAdvancedWrap: true } 
+        }).setScrollFactor(0).setDepth(999991);
+
+        // NÚT "TIẾP TỤC" PHẲNG (CẢM ỨNG CỰC NHẠY)
+        this.tutNextBtn = this.add.rectangle(panelX, panelY + 140, 150, 45, 0xf1c40f)
+            .setScrollFactor(0)
+            .setDepth(999992)
+            .setInteractive({ useHandCursor: true });
+
+        this.tutNextTxt = this.add.text(panelX, panelY + 140, "TIẾP TỤC", { 
+            font: 'bold 16px Arial', fill: '#000000' 
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(999993);
+
+        // Sự kiện Click nút Tiếp Tục
+        this.tutNextBtn.on('pointerdown', () => {
+            this.handleTutorialNext();
+        });
+
+        // BẮT SỰ KIỆN TỰ HỦY KHI HOÀN THÀNH TUTORIAL Ở BƯỚC CUỐI
+        this.tutElements = [this.tutBg, this.tutText, this.tutNextBtn, this.tutNextTxt];
+
+        // BẮT ĐẦU BƯỚC 0
+        this.showTutorialStep(0);
+    }
+
+    showTutorialStep(step) {
+        this.tutorialStep = step;
+        
+        // Mặc định ẩn nút Tiếp Tục (Chỉ hiện khi cần đọc thoại)
+        this.tutNextBtn.setVisible(false);
+        this.tutNextTxt.setVisible(false);
+
+        // Reset lại tấm kính đen mờ (Xóa các lỗ đục cũ)
+        this.rt.clear();
+        this.rt.fill(0x000000, 0.75);
+
+        // Cọ vẽ hình tròn dùng để đục lỗ
+        let brush = this.add.circle(0, 0, 50, 0xffffff).setVisible(false);
+
+        switch(step) {
+            case 0:
+                // BƯỚC 0: Chào mừng
+                this.tutText.setText("Chào mừng bạn đã đến với tiệm lẩu My Hotpot Story, bạn sẽ là chủ tiệm lẩu này, tôi sẽ giúp bạn từ những bước nhỏ nhất.");
+                this.tutNextBtn.setVisible(true);
+                this.tutNextTxt.setVisible(true);
+                break;
+
+            case 1:
+                // BƯỚC 1: Khách vào và gọi món
+                this.tutText.setText("Vị khách đầu tiên của quán, hãy đến nhận order bằng cách bấm vào yêu cầu của khách.");
+                
+                // Trực tiếp sinh ra đúng 1 vị khách cho Tutorial
+                this.spawnTutorialCustomer(); 
+                break;
+
+            case 2:
+                // BƯỚC 2: Yêu cầu vuốt màn hình sang Bếp
+                this.tutText.setText("Hãy kéo vuốt màn hình sang bên phải để di chuyển vào nhà bếp.");
+                break;
+
+            case 3:
+                // BƯỚC 3: Yêu cầu bấm Bếp nấu
+                this.tutText.setText("Hãy bấm vào một cái bếp để chuẩn bị thức ăn.");
+                
+                // Đục lỗ sáng rực tại cả 4 cái Bếp nấu ở phòng Bếp (Y=-1500)
+                this.stoves.forEach(stove => {
+                    brush.setRadius(70);
+                    this.rt.erase(brush, stove.x, stove.y + 2000); // Tọa độ Y dịch chuyển theo RenderTexture
+                });
+                break;
+
+            case 4:
+                // BƯỚC 4: Yêu cầu bưng đồ ăn ra phục vụ
+                this.tutText.setText("Đang chuẩn bị...\n\nKhi thức ăn chín, hãy bấm vào nút BƯNG RA để phục vụ khách.");
+                // (Tiêu điểm sáng sẽ tự động vẽ đè lên cái bếp nấu chín ở hàm handleStoveClick)
+                break;
+
+            case 5.1:
+                this.tutText.setText("Vậy là bạn đã nắm được cách phục vụ khách hàng rồi đấy!");
+                
+                // =======================================================
+                // TỰ ĐỘNG LƯỚT CAMERA VỀ LẠI SẢNH CHÍNH (MƯỢT MÀ TRONG 500MS)
+                // =======================================================
+                this.tweens.add({
+                    targets: this.cameras.main,
+                    scrollX: 540, // Tọa độ X của Sảnh Chính
+                    duration: 500,
+                    ease: 'Sine.easeInOut'
+                });
+                // =======================================================
+
+                this.tutNextBtn.setVisible(true);
+                this.tutNextTxt.setVisible(true);
+                break;
+
+            case 5.2:
+                this.tutText.setText("Nhớ là luôn chú ý số lượng nguyên liệu còn lại trong kho.");
+                
+                // Đục lỗ soi sáng HUD Kho hàng ở góc trên bên trái
+                brush.setRadius(100);
+                this.rt.erase(brush, 540 + 130, 25 + 2000); // 130 là trung tâm text HUD kho khi đứng ở sảnh
+                
+                this.tutNextBtn.setVisible(true);
+                this.tutNextTxt.setVisible(true);
+                break;
+
+            case 5.3:
+                this.tutText.setText("Cũng như nhớ rửa bát sau mỗi lần phục vụ nếu không bạn sẽ không có bát mới.");
+                
+                // Teleport camera sang khu Bếp để chỉ cho người chơi bồn rửa bát
+                this.cameras.main.scrollX = 0;
+                
+                // Đục lỗ soi sáng Bồn Rửa Bát
+                brush.setRadius(110);
+                this.rt.erase(brush, this.sinkX, this.sinkY + 2000);
+                
+                this.tutNextBtn.setVisible(true);
+                this.tutNextTxt.setVisible(true);
+                break;
+
+            case 5.4:
+                this.tutText.setText("Ngoài ra bạn có thể dùng tiền để mở khóa bàn mới và mở rộng quy mô nhà hàng.");
+                
+                // Teleport camera về lại Sảnh chính để chỉ cho người chơi bàn khóa
+                this.cameras.main.scrollX = 540;
+                
+                // Đục lỗ soi sáng cái Bàn số 2 (Đang bị khóa)
+                brush.setRadius(120);
+                this.rt.erase(brush, 920, 350 + 2000);
+                
+                this.tutNextBtn.setVisible(true);
+                this.tutNextTxt.setVisible(true);
+                break;
+
+            case 5.5:
+                this.tutText.setText("Chúc bạn kinh doanh thành công và gặt hái nhiều tài lộc!");
+                this.tutNextBtn.setVisible(true);
+                this.tutNextTxt.setVisible(true);
+                break;
+        }
+
+        brush.destroy(); // Giải phóng cọ vẽ
+    }
+
+    handleTutorialNext() {
+        if (this.tutorialStep === 0) {
+            this.showTutorialStep(1);
+        } else if (this.tutorialStep === 5.1) {
+            this.showTutorialStep(5.2);
+        } else if (this.tutorialStep === 5.2) {
+            this.showTutorialStep(5.3);
+        } else if (this.tutorialStep === 5.3) {
+            this.showTutorialStep(5.4);
+        } else if (this.tutorialStep === 5.4) {
+            this.showTutorialStep(5.5);
+        } else if (this.tutorialStep === 5.5) {
+            // KẾT THÚC TUTORIAL
+            this.tutorialDone = true;
+            localStorage.setItem('hotpot_tutorial_done', 'true');
+            
+            // Hủy toàn bộ UI hướng dẫn
+            this.rt.destroy();
+           this.tutElements.forEach(el => el.destroy()); 
+
+            // Khởi động lại Timer sinh khách tự động mặc định của game
+            this.time.addEvent({
+                delay: 6000,
+                callback: this.spawnCustomer,
+                callbackScope: this,
+                loop: true
+            });
+
+            console.log("Hoàn thành hướng dẫn tân thủ!");
+        }
+    }
+
+    spawnTutorialCustomer() {
+        // Luôn chọn khách số 1
+        let customer = this.add.sprite(this.queueStartX, this.queueStartY, 'cust1_down')
+            .setDisplaySize(50, 80).setDepth(4000);
+        
+        customer.custType = 'cust1';
+        customer.state = 'WALKING_TO_TABLE';
+        this.customers.push(customer);
+
+        let table = this.tables[0]; // Luôn là Bàn 1
+        table.status = 'OCCUPIED';
+        customer.assignedTableId = table.id;
+
+        // Đi bộ vào bàn
+        customer.setTexture('cust1_side');
+        this.tweens.add({
+            targets: customer,
+            x: this.doorOutsideX,
+            y: this.doorOutsideY,
+            duration: 1000,
+            onComplete: () => {
+                this.time.delayedCall(1, () => {
+                    customer.setPosition(this.doorInsideX, this.doorInsideY);
+                    customer.setTexture('cust1_down');
+                    this.tweens.add({
+                        targets: customer,
+                        y: table.y + table.seatOffsetY,
+                        duration: 1500,
+                        onComplete: () => {
+                            this.tweens.add({
+                                targets: customer,
+                                x: table.x + table.seatOffsetX,
+                                duration: 800,
+                                onComplete: () => {
+                                    customer.setTexture('cust1_sit');
+                                    customer.state = 'SIT_ORDERING';
+                                    
+                                    // Hiện bong bóng gọi món (Luôn gọi Lẩu Cay 🌶️ để khống chế nguyên liệu)
+                                    customer.order = { id: 'spicy', name: '🌶️ Lẩu Cay', price: 60, cookTime: 4000, textureKey: 'pot_spicy', req: { chili: 1, beef: 2, veggies: 1 } };
+                                    
+                                    customer.bubbleBg = this.add.rectangle(customer.x, customer.y - 60, 110, 35, 0xffffff).setStrokeStyle(2, 0x0).setDepth(4001).setInteractive({ useHandCursor: true });
+                                    customer.bubbleTxt = this.add.text(customer.x, customer.y - 60, customer.order.name, { font: 'bold 12px Arial', fill: '#000' }).setOrigin(0.5).setDepth(4002);
+
+                                    // ĐỤC LỖ SOI SÁNG BONG BÓNG TRÊN ĐẦU KHÁCH
+                                    let brush = this.add.circle(0, 0, 80, 0xffffff).setVisible(false);
+                                    this.rt.erase(brush, customer.x, customer.y - 60 + 2000);
+                                    brush.destroy();
+
+                                    // Lắng nghe click bong bóng để sang Bước 2
+                                    customer.bubbleBg.on('pointerup', () => {
+                                        customer.state = 'WAITING_FOR_FOOD';
+                                        customer.bubbleTxt.setText('⏳ Đang nấu...');
+                                        customer.bubbleBg.setFillStyle(0xf1c40f);
+
+                                        this.pendingOrders.push({
+                                            customerRef: customer,
+                                            recipe: customer.order.req,
+                                            fullOrderData: customer.order
+                                        });
+
+                                        // CHUYỂN SANG BƯỚC 2: YÊU CẦU QUẸT SANG BẾP
+                                        this.showTutorialStep(2);
+                                    });
+                                }
+                            });
+                        }
+                    });
+                });
+            }
+        });
+    }
 }

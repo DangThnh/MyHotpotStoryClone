@@ -27,6 +27,10 @@ class BootScene extends Phaser.Scene {
         this.load.image('chef_down', 'chef_down.png'); 
         this.load.image('chef_side', 'chef_side.png'); 
         this.load.image('chef_up', 'chef_up.png');
+
+        this.load.image('waitress_down', 'waitress_down.png'); 
+        this.load.image('waitress_side', 'waitress_side.png'); 
+        this.load.image('waitress_up', 'waitress_up.png');
         
         this.load.image('outdoor_bg', 'outdoor_bg.png'); // Ảnh nền Mặt Tiền Quán
         
