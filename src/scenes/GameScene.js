@@ -67,7 +67,7 @@ class GameScene extends Phaser.Scene {
                     { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
                     { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
                     { x: 1350, y: 300, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
-                    { x: 1470, y: 300, dir: 'side', flipX: true }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
+                    { x: 1230, y: 300, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
                 ]
             },
             { id: 6, x: 1450, y: 400, status: 'LOCKED', isLocked: true, isVip: true, unlockPrice: 4000, seatOffsetX: 0, seatOffsetY: 25,
@@ -75,7 +75,7 @@ class GameScene extends Phaser.Scene {
                     { x: 810, y: 700, dir: 'down', flipX: false },  // Mốc 1: Đi lên ngã rẽ phòng VIP (Y=550)
                     { x: 1350, y: 700, dir: 'side', flipX: true }, // Mốc 2: Rẽ phải chui qua Cửa phòng VIP (X=1120)
                     { x: 1350, y: 300, dir: 'down', flipX: false }, // Mốc 3: Đi dọc hành lang trong phòng VIP lên Y=425
-                    { x: 1230, y: 300, dir: 'side', flipX: false }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
+                    { x: 1470, y: 300, dir: 'side', flipX: true }  // Mốc 4: Rẽ phải ngồi vào ghế bàn VIP 5
                 ]
              }
         ];
@@ -400,6 +400,7 @@ class GameScene extends Phaser.Scene {
         // KHỞI TẠO GIAO DIỆN CỬA HÀNG (ẨN MẶC ĐỊNH)
         this.createShopUI();
         this.createUpgradeUI(); // Thêm dòng này
+          this.createRecipeUI();
 
 // ==========================================
         // GIAI ĐOẠN 3: KHỞI TẠO MÁY TRẠNG THÁI KHÁCH HÀNG
@@ -590,6 +591,32 @@ class GameScene extends Phaser.Scene {
         //     }
         // });
 
+        // ==========================================
+        // NÚT BẤM XEM DANH SÁCH CÔNG THỨC Ở BẾP (X = 270, Y = 880)
+        // ==========================================
+        let recipeBtn = this.add.image(270, 880, 'white_box')
+            .setDisplaySize(240, 60)
+            .setTint(0x27ae60)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(100);
+            
+        this.add.text(270, 880, "📜 CÔNG THỨC", { font: 'bold 18px Arial', fill: '#fff' })
+            .setOrigin(0.5)
+            .setDepth(101);
+
+        recipeBtn.on('pointerdown', () => {
+            if (this.isDragging) return;
+            
+            // CHỐT CHẶN: Không cho mở công thức khi đang chạy Hướng dẫn tân thủ
+            if (!this.tutorialDone) return;
+
+            // Teleport UI Công thức đập thẳng vào mắt người chơi
+            let currentCamX = this.cameras.main.scrollX + 270; 
+            let currentCamY = this.cameras.main.scrollY + 480;
+            this.recipeUI.setPosition(currentCamX, currentCamY);
+            
+            this.recipeUI.setVisible(true);
+        });
     }
 
     update() {
@@ -1533,7 +1560,31 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-   runWaitressAI() {
+    returnWaitressToStandby(targetLocation, targetTable) {
+        let hallwaySanhX = 810;
+        let hallwayVipX = 1350;
+        let doorVipY = 700;
+
+        let pathReturn = [];
+        if (targetTable.isVip) {
+            pathReturn.push({ x: hallwayVipX, y: targetLocation.y, dir: 'side', flipX: hallwayVipX < targetLocation.x });
+            pathReturn.push({ x: hallwayVipX, y: doorVipY, dir: targetLocation.y > doorVipY ? 'up' : 'down', flipX: false });
+            pathReturn.push({ x: hallwaySanhX, y: doorVipY, dir: 'side', flipX: true });
+            pathReturn.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'up', flipX: false });
+            pathReturn.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
+        } else {
+            pathReturn.push({ x: hallwaySanhX, y: targetLocation.y, dir: 'side', flipX: hallwaySanhX < targetLocation.x });
+            pathReturn.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: targetLocation.y > this.waitressStandbyY ? 'up' : 'down', flipX: false });
+            pathReturn.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
+        }
+
+        this.walkCustomerPath(this.waitressSprite, pathReturn, () => {
+            this.waitressSprite.setTexture('waitress_down');
+            this.waitressState = 'IDLE'; 
+        }, 250);
+    }
+
+  runWaitressAI() {
         this.time.addEvent({
             delay: 1000, 
             callback: () => {
@@ -1541,107 +1592,167 @@ class GameScene extends Phaser.Scene {
 
                 let targetTask = null;
                 let targetLocation = null;
-                let targetObject = null;
+                let targetObject = null; // Lưu trữ bàn hoặc bếp tương tác
+                let targetTable = null;  // Lưu trữ dữ liệu bàn đích
 
                 // ==============================================
-                // QUÉT TÌM VIỆC ƯU TIÊN (GIỮ NGUYÊN)
+                // 1. QUÉT TÌM VIỆC ƯU TIÊN
                 // ==============================================
                 let readyStoveIndex = this.stoves.findIndex(s => s.status === 'READY_TO_SERVE');
                 if (readyStoveIndex !== -1) {
                     targetTask = 'SERVE_FOOD';
                     targetObject = readyStoveIndex;
-                    targetLocation = { x: this.stoves[readyStoveIndex].x, y: this.stoves[readyStoveIndex].y + 40 };
+                    let stoveOrder = this.stoves[readyStoveIndex].currentOrder;
+                    targetTable = this.tables.find(t => t.id === stoveOrder.customerRef.assignedTableId);
+                    targetLocation = { x: targetTable.x, y: targetTable.y + 40 }; // Đích đến cuối cùng là Bàn ăn
                 } else {
                     let orderingCustomer = this.customers.find(c => c.state === 'SIT_ORDERING');
                     if (orderingCustomer) {
                         targetTask = 'TAKE_ORDER';
                         targetObject = orderingCustomer;
-                        let tData = this.tables.find(t => t.id === orderingCustomer.assignedTableId);
-                        targetLocation = { x: tData.x, y: tData.y + 40 }; 
+                        targetTable = this.tables.find(t => t.id === orderingCustomer.assignedTableId);
+                        targetLocation = { x: targetTable.x, y: targetTable.y + 40 }; 
                     }
                 }
 
                 // ==============================================
-                // LẬP LỘ TRÌNH GPS NÉ TƯỜNG CHO PHỤC VỤ
+                // 2. LẬP LỘ TRÌNH GPS NÉ TƯỜNG (3-LEG JOURNEY)
                 // ==============================================
                 if (targetTask) {
                     this.waitressState = 'WORKING';
                     
-                    // --- CÁC NÚT TỌA ĐỘ ĐỂ CẬU TỰ ĐIỀU CHỈNH CHO KHỚP ẢNH NỀN ---
-                    let doorKitchenX = 540;  // Tọa độ X của cánh cửa thông giữa Bếp và Sảnh
-                    let doorKitchenY = 650;  // Tọa độ Y của cánh cửa thông (Thường để dưới đáy sảnh)
-                    let hallwaySanhX = 810;  // Trục dọc giữa Sảnh chính
-                    let hallwayBepX = 270;   // Trục dọc giữa Bếp
-                    // -----------------------------------------------------------
-
-                    let path = [];
+                    // --- CÁC NÚT GIAO THÔNG CHỐNG XUYÊN TƯỜNG ---
+                    let doorKitchenX = 540;  // Cửa Bếp
+                    let doorKitchenY = 700;  
+                    let doorVipX = 1080;     // Cửa phòng VIP
+                    let doorVipY = 700;      
+                    let hallwaySanhX = 810;  // Trục dọc Sảnh
+                    let hallwayBepX = 270;   // Trục dọc Bếp
+                    let hallwayVipX = 1350;  // Trục dọc VIP
+                    // ---------------------------------------------
 
                     if (targetTask === 'SERVE_FOOD') {
-                        // KỊCH BẢN ĐI BẾP LẤY LẨU: Không đi xuyên tường mà chui qua Cửa Bếp
-                        // 1. Đi từ chỗ chờ xuống ngang hàng Cửa Bếp
-                        path.push({ x: hallwaySanhX, y: doorKitchenY, dir: 'down', flipX: false });
-                        // 2. Chui qua Cửa Bếp sang trục giữa Bếp
-                        path.push({ x: hallwayBepX, y: doorKitchenY, dir: 'side', flipX: true });
-                        // 3. Đi ngược lên trục dọc Bếp để ngang hàng cái Bếp cần bưng đồ
-                        path.push({ x: hallwayBepX, y: targetLocation.y, dir: 'up', flipX: false });
-                        // 4. Rẽ ngang vào mặt cái Bếp đó
-                        path.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwayBepX });
-                    } else {
-                        // KỊCH BẢN LẤY ORDER Ở SẢNH: Đi trục dọc Sảnh bình thường
-                        path.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'side', flipX: true });
-                        path.push({ x: hallwaySanhX, y: targetLocation.y, dir: targetLocation.y > this.waitressStandbyY ? 'down' : 'up', flipX: false });
-                        path.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwaySanhX });
-                    }
+                        // =======================================================
+                        // KỊCH BẢN PHỤC VỤ (CHẶNG 1: CHẠY VÀO BẾP LẤY LẨU)
+                        // =======================================================
+                        let pathStove = [];
+                        let stove = this.stoves[targetObject];
 
-                    // Thực thi đi tới đích
-                    this.walkCustomerPath(this.waitressSprite, path, () => {
-                        this.waitressSprite.setTexture('waitress_up'); 
-                        
-                        this.time.delayedCall(500, () => {
-                            if (targetTask === 'SERVE_FOOD') {
-                                this.handleStoveClick(targetObject);
-                            } else if (targetTask === 'TAKE_ORDER') {
-                                if (targetObject.state === 'SIT_ORDERING') {
-                                    targetObject.state = 'WAITING_FOR_FOOD';
-                                    if (targetObject.bubbleTxt) {
-                                        targetObject.bubbleTxt.setText('⏳ Đang nấu...');
-                                        targetObject.bubbleBg.setFillStyle(0xf1c40f);
-                                    }
-                                    this.pendingOrders.push({
-                                        customerRef: targetObject,
-                                        recipe: targetObject.order.req,
-                                        fullOrderData: targetObject.order 
-                                    });
-                                    this.refreshStovesIndicator();
-                                    this.startPatienceTimer(targetObject, 'WAITING_FOR_FOOD'); 
+                        pathStove.push({ x: hallwaySanhX, y: doorKitchenY, dir: 'down', flipX: false });
+                        pathStove.push({ x: hallwayBepX, y: doorKitchenY, dir: 'side', flipX: true });
+                        pathStove.push({ x: hallwayBepX, y: stove.y + 40, dir: 'up', flipX: false });
+                        pathStove.push({ x: stove.x, y: stove.y + 40, dir: 'side', flipX: stove.x < hallwayBepX });
+
+                        // Chạy vào bếp với tốc độ 250
+                        this.walkCustomerPath(this.waitressSprite, pathStove, () => {
+                            this.waitressSprite.setTexture('waitress_up'); 
+                            
+                            // Đứng ở bếp lấy đồ trong 0.3s (Đã sửa cú pháp sạch sẽ, không truyền bậy bạ 250 vào đây)
+                            this.time.delayedCall(300, () => {
+                                if (!this.waitressSprite || !this.waitressSprite.active) return;
+
+                                let pathTable = [];
+                                
+                                // Đi ra khỏi bếp chui qua cửa Bếp
+                                pathTable.push({ x: hallwayBepX, y: stove.y + 40, dir: 'side', flipX: hallwayBepX < stove.x });
+                                pathTable.push({ x: hallwayBepX, y: doorKitchenY, dir: 'down', flipX: false });
+                                pathTable.push({ x: hallwaySanhX, y: doorKitchenY, dir: 'side', flipX: false });
+
+                                if (targetTable.isVip) {
+                                    // Bàn VIP
+                                    pathTable.push({ x: hallwaySanhX, y: doorVipY, dir: 'up', flipX: false });
+                                    pathTable.push({ x: hallwayVipX, y: doorVipY, dir: 'side', flipX: false });
+                                    pathTable.push({ x: hallwayVipX, y: targetLocation.y, dir: targetLocation.y > doorVipY ? 'down' : 'up', flipX: false });
+                                    pathTable.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwayVipX });
+                                } else {
+                                    // Bàn Thường
+                                    pathTable.push({ x: hallwaySanhX, y: targetLocation.y, dir: 'up', flipX: false });
+                                    pathTable.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwaySanhX });
                                 }
-                            }
 
-                            // ==============================================
-                            // LỘ TRÌNH ĐI VỀ SAU KHI LÀM XONG VIỆC
-                            // ==============================================
-                            let returnPath = [];
+                                // Bưng lẩu ra bàn khách với tốc độ 250
+                                this.walkCustomerPath(this.waitressSprite, pathTable, () => {
+                                    this.waitressSprite.setTexture('waitress_up');
+                                    
+                                    // Đặt lẩu lên bàn
+                                    this.handleStoveClick(targetObject);
 
-                            if (targetTask === 'SERVE_FOOD') {
-                                // Vừa lấy đồ trong Bếp xong -> Đi ngược lại chui qua cửa về Sảnh
-                                returnPath.push({ x: hallwayBepX, y: targetLocation.y, dir: 'side', flipX: hallwayBepX < targetLocation.x });
-                                returnPath.push({ x: hallwayBepX, y: doorKitchenY, dir: 'down', flipX: false });
-                                returnPath.push({ x: hallwaySanhX, y: doorKitchenY, dir: 'side', flipX: false });
-                                returnPath.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'up', flipX: false });
-                                returnPath.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
-                            } else {
-                                // Vừa lấy Order ngoài Sảnh xong -> Quay về chỗ chờ
-                                returnPath.push({ x: hallwaySanhX, y: targetLocation.y, dir: 'side', flipX: hallwaySanhX < targetLocation.x });
-                                returnPath.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: targetLocation.y > this.waitressStandbyY ? 'up' : 'down', flipX: false });
-                                returnPath.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
-                            }
+                                    // Đi về chỗ nghỉ
+                                    let pathReturn = [];
+                                    if (targetTable.isVip) {
+                                        pathReturn.push({ x: hallwayVipX, y: targetLocation.y, dir: 'side', flipX: hallwayVipX < targetLocation.x });
+                                        pathReturn.push({ x: hallwayVipX, y: doorVipY, dir: targetLocation.y > doorVipY ? 'up' : 'down', flipX: false });
+                                        pathReturn.push({ x: hallwaySanhX, y: doorVipY, dir: 'side', flipX: true });
+                                        pathReturn.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'up', flipX: false });
+                                        pathReturn.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
+                                    } else {
+                                        pathReturn.push({ x: hallwaySanhX, y: targetLocation.y, dir: 'side', flipX: hallwaySanhX < targetLocation.x });
+                                        pathReturn.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: targetLocation.y > this.waitressStandbyY ? 'up' : 'down', flipX: false });
+                                        pathReturn.push({ x: this.waitressStandbyX, y: this.waitressStandbyY, dir: 'side', flipX: false });
+                                    }
 
-                            this.walkCustomerPath(this.waitressSprite, returnPath, () => {
-                                this.waitressSprite.setTexture('waitress_down');
-                                this.waitressState = 'IDLE'; 
+                                    // Đi về với tốc độ 250
+                                    this.walkCustomerPath(this.waitressSprite, pathReturn, () => {
+                                        this.waitressSprite.setTexture('waitress_down');
+                                        this.waitressState = 'IDLE'; 
+                                    }, 250);
+                                }, 250);
+                            }, [], this); // Đã bọc [], this cực kỳ chuẩn xác cho delayedCall
+                        }, 350); // Đầu ra của walkCustomerPath chặng 1 nhận tốc độ 250 chuẩn chỉ
+
+                    
+                        // ... (Kịch bản lấy order TAKE_ORDER bên dưới giữ nguyên không đổi) ...
+                    } else if (targetTask === 'TAKE_ORDER') {
+                        // =======================================================
+                        // KỊCH BẢN LẤY ORDER (ĐI TỪ CHỖ CHỜ RA BÀN KHÁCH & QUAY VỀ)
+                        // =======================================================
+                        let pathOrder = [];
+                        if (targetTable.isVip) {
+                            pathOrder.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'side', flipX: true });
+                            pathOrder.push({ x: hallwaySanhX, y: doorVipY, dir: 'down', flipX: false });
+                            pathOrder.push({ x: hallwayVipX, y: doorVipY, dir: 'side', flipX: false });
+                            pathOrder.push({ x: hallwayVipX, y: targetLocation.y, dir: targetLocation.y > doorVipY ? 'down' : 'up', flipX: false });
+                            pathOrder.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwayVipX });
+                        } else {
+                            pathOrder.push({ x: hallwaySanhX, y: this.waitressStandbyY, dir: 'side', flipX: true });
+                            pathOrder.push({ x: hallwaySanhX, y: targetLocation.y, dir: targetLocation.y > this.waitressStandbyY ? 'down' : 'up', flipX: false });
+                            pathOrder.push({ x: targetLocation.x, y: targetLocation.y, dir: 'side', flipX: targetLocation.x < hallwaySanhX });
+                        }
+
+                        this.walkCustomerPath(this.waitressSprite, pathOrder, () => {
+                            this.waitressSprite.setTexture('waitress_up'); 
+                            
+                            this.time.delayedCall(500, () => {
+                                // =======================================================
+                                // CHỐT CHẶN PHÒNG THỦ: NẾU KHÁCH ĐÃ BỎ VỀ TRƯỚC KHI PHỤC VỤ ĐẾN NƠI
+                                // =======================================================
+                                if (!targetObject || !targetObject.active || targetObject.state !== 'SIT_ORDERING') {
+                                    console.log("Khách đã bỏ đi trước khi ghi đơn! Phục vụ quay về...");
+                                    this.returnWaitressToStandby(targetLocation, targetTable); // Đi về nghỉ ngơi
+                                    return; // Thoát sớm, bảo vệ game không bị sập!
+                                }
+                                // =======================================================
+
+                                // NẾU KHÁCH CÒN SỐNG -> TIẾN HÀNH LẤY ORDER
+                                targetObject.state = 'WAITING_FOR_FOOD';
+                                if (targetObject.bubbleTxt && targetObject.bubbleTxt.active) {
+                                    targetObject.bubbleTxt.setText('⏳ Đang nấu...');
+                                    targetObject.bubbleBg.setFillStyle(0xf1c40f);
+                                }
+                                this.pendingOrders.push({
+                                    customerRef: targetObject,
+                                    recipe: targetObject.order.req,
+                                    fullOrderData: targetObject.order 
+                                });
+                                this.refreshStovesIndicator();
+                                this.startPatienceTimer(targetObject, 'WAITING_FOR_FOOD'); 
+
+                                // LẤY XONG -> ĐI VỀ CHỖ NGHỈ
+                                this.returnWaitressToStandby(targetLocation, targetTable);
                             });
-                        });
-                    }, 450);
+                        }, 400);
+                    
+                    }
                 }
             },
             callbackScope: this,
@@ -1919,5 +2030,53 @@ class GameScene extends Phaser.Scene {
 
     saveInventory() {
         localStorage.setItem('hotpot_inventory', JSON.stringify(this.inventory));
+    }
+
+    createRecipeUI() {
+        // Khởi tạo Container ghim tầng cao nhất
+        this.recipeUI = this.add.container(0, 0).setDepth(20000).setVisible(false);
+        
+        // Nền đen mờ che toàn bộ map chống click nhầm
+        let overlay = this.add.rectangle(0, 0, 3000, 3000, 0x000000, 0.8).setInteractive();
+        
+        // Bảng Menu trắng ở giữa
+        let panel = this.add.rectangle(0, 0, 420, 500, 0xffffff).setStrokeStyle(4, 0x27ae60);
+        let title = this.add.text(0, -210, "📜 DANH SÁCH CÔNG THỨC", { font: 'bold 24px Arial', fill: '#27ae60' }).setOrigin(0.5);
+        
+        this.recipeUI.add([overlay, panel, title]);
+
+        // Danh sách 3 công thức lẩu thần thánh theo GDD
+        let recipes = [
+            { name: "🌶️ Lẩu Cay Tứ Xuyên", price: 60, desc: "Yêu cầu:\n• 1 Ớt Tứ Xuyên\n• 2 Ba Chỉ Bò\n• 1 Rau Thập Cẩm" },
+            { name: "🌿 Lẩu Nấm Dưỡng Sinh", price: 40, desc: "Yêu cầu:\n• 1 Thảo Mộc\n• 2 Rau Thập Cẩm" },
+            { name: "🍤 Lẩu Hải Sản Trường Thọ", price: 110, desc: "Yêu cầu:\n• 1 Xương Ống\n• 2 Hải Sản\n• 1 Rau Thập Cẩm" }
+        ];
+
+        recipes.forEach((rec, index) => {
+            let startY = -110 + (index * 115);
+
+            // Khung của từng công thức
+            let itemBg = this.add.rectangle(0, startY, 380, 95, 0xf8f9fa).setStrokeStyle(1, 0xdcdde1);
+            
+            // Tên món ăn
+            let nameTxt = this.add.text(-170, startY - 25, rec.name, { font: 'bold 18px Arial', fill: '#2c3e50' }).setOrigin(0, 0.5);
+            
+            // Mô tả nguyên liệu chi tiết
+            let descTxt = this.add.text(-170, startY + 15, rec.desc, { font: '14px Arial', fill: '#7f8c8d' }).setOrigin(0, 0.5);
+            
+            // Số vàng thu hoạch được (Căn lề phải)
+            let priceTxt = this.add.text(170, startY, `🪙 ${rec.price}`, { font: 'bold 20px Arial', fill: '#e67e22' }).setOrigin(1, 0.5);
+
+            this.recipeUI.add([itemBg, nameTxt, descTxt, priceTxt]);
+        });
+
+        // Nút Đóng UI
+        let closeBtn = this.add.rectangle(170, -210, 40, 40, 0xe74c3c).setInteractive({ useHandCursor: true });
+        let closeTxt = this.add.text(170, -210, "X", { font: 'bold 20px Arial', fill: '#fff' }).setOrigin(0.5);
+        closeBtn.on('pointerdown', () => {
+            this.recipeUI.setVisible(false);
+        });
+
+        this.recipeUI.add([closeBtn, closeTxt]);
     }
 }
