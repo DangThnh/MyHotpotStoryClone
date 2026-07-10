@@ -215,6 +215,10 @@ class GameScene extends Phaser.Scene {
                     if (this.gold >= tableData.unlockPrice) {
                         // Đủ tiền -> Trực tiếp mở khóa!
                         this.gold -= tableData.unlockPrice;
+
+                        // PHÁT TIẾNG TIÊU TIỀN MỞ BÀN
+                        this.sound.play('sfx_buy', { volume: 0.4 });
+
                         localStorage.setItem('hotpot_gold', this.gold.toString());
                         this.goldText.setText(`🪙 ${this.gold}`);
 
@@ -558,6 +562,8 @@ class GameScene extends Phaser.Scene {
                 this.washBg.setVisible(true);
                 this.washFill.setVisible(true).width = 0;
 
+                  this.sound.play('sfx_wash', { loop: true, volume: 0.25 });
+
                 // Chạy thanh Loading rửa bát trong 2 giây (2000ms)
                 this.tweens.add({
                     targets: this.washFill,
@@ -566,7 +572,10 @@ class GameScene extends Phaser.Scene {
                     onComplete: () => {
                         this.dirtyDishes--; 
                         this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
-                        
+                    
+
+                           this.sound.stopByKey('sfx_wash');
+
                         // Ẩn ảnh bát đĩa bẩn nếu đã rửa sạch hết
                         if (this.dirtyDishes === 0) {
                             this.dirtyDishesSprite.setVisible(false);
@@ -617,6 +626,9 @@ class GameScene extends Phaser.Scene {
             
             this.recipeUI.setVisible(true);
         });
+
+        this.sound.stopByKey('bgm'); 
+        this.sound.play('bgm', { loop: true, volume: 0.4 }); // Âm lượng nhạc nền 30% để không đè SFX
     }
 
     update() {
@@ -682,6 +694,9 @@ class GameScene extends Phaser.Scene {
             for (let item in req) { this.inventory[item] -= req[item]; }
             this.updateInventoryHUD();
               this.saveInventory(); 
+
+              // PHÁT TIẾNG NẤU LẨU XÈO XÈO
+            this.sound.play('sfx_cook', { volume: 0.3 });
             
             stove.currentOrder = this.pendingOrders.shift(); // Lấy đơn khỏi hàng chờ
             stove.status = 'COOKING';
@@ -856,6 +871,10 @@ class GameScene extends Phaser.Scene {
         if (this.gold >= this.totalCost) {
             // Trừ tiền
             this.gold -= this.totalCost;
+
+            // PHÁT TIẾNG TIÊU TIỀN MỞ BÀN
+                        this.sound.play('sfx_buy', { volume: 0.4 });
+
             localStorage.setItem('hotpot_gold', this.gold.toString());
             this.goldText.setText(`🪙 ${this.gold}`);
 
@@ -938,6 +957,7 @@ class GameScene extends Phaser.Scene {
                             customer.state = 'SIT_ORDERING'; 
                             this.startPatienceTimer(customer, 'SIT_ORDERING'); 
                             this.showOrderBubble(customer); 
+                            this.updateChatterAtmosphere();
                         });
                         // =======================================================
                     });
@@ -952,6 +972,7 @@ class GameScene extends Phaser.Scene {
             
         this.startPatienceTimer(customer, 'WAITING_OUTSIDE'); // Bắt đầu đếm ngược giận dữ ngoài đường
         }
+
     }
 
    showOrderBubble(customer) {
@@ -982,6 +1003,7 @@ class GameScene extends Phaser.Scene {
             if (this.isDragging) return; // Đang vuốt màn hình thì bỏ qua
 
             if (customer.state === 'SIT_ORDERING') {
+                this.sound.play('sfx_serve', { volume: 0.3 });
 
                 customer.state = 'WAITING_FOR_FOOD';
                 this.startPatienceTimer(customer, 'WAITING_FOR_FOOD');
@@ -1010,6 +1032,7 @@ class GameScene extends Phaser.Scene {
         }
         
         customer.state = 'EATING';
+        this.sound.play('sfx_serve', { volume: 0.3 });
 
         // 1. TÌM BÀN ĂN CỦA KHÁCH
         let table = this.tables.find(t => t.id === customer.assignedTableId);
@@ -1067,6 +1090,8 @@ class GameScene extends Phaser.Scene {
             // Trả tiền
             let finalPrice = table.isVip ? customer.order.price * 2 : customer.order.price;
             this.gold += finalPrice;
+            // PHÁT TIẾNG TIỀN VÀNG KHI KHÁCH THANH TOÁN
+            this.sound.play('sfx_cash', { volume: 0.4 });
             localStorage.setItem('hotpot_gold', this.gold.toString());
             this.goldText.setText(`🪙 ${this.gold}`);
 
@@ -1077,6 +1102,7 @@ class GameScene extends Phaser.Scene {
             table.status = 'EMPTY'; 
             this.customers = this.customers.filter(c => c !== customer);
             customer.destroy();
+            this.updateChatterAtmosphere();
 
            // 3. GỌI KHÁCH TIẾP THEO Ở NGOÀI TRỜI VÀO
            // =======================================================
@@ -1163,6 +1189,9 @@ class GameScene extends Phaser.Scene {
     handleCustomerAngryLeave(customer, stateAtLeave) {
         if (!customer || !customer.active) return;
 
+         this.sound.play('sfx_angry', { volume: 0.4 });
+
+
         console.log(`😡 Khách đã bỏ về vì chờ quá lâu ở trạng thái: ${stateAtLeave}!`);
 
         // 1. DỌN SẠCH CÁC LIÊN KẾT ĐƠN HÀNG CŨ TRONG BẾP (ĐỂ TRÁNH BẾP NẤU CHO MA)
@@ -1178,37 +1207,41 @@ class GameScene extends Phaser.Scene {
         let angryBubble = this.add.sprite(customer.x, customer.y - 60, 'angry_bubble').setDisplaySize(40, 40).setDepth(4005);
         
         // 3. CHO KHÁCH ĐI BỘ RA KHỎI TIỆM (NẾU ĐANG NGỒI TRONG QUÁN)
+        // 3. CHO KHÁCH ĐI BỘ RA KHỎI TIỆM (NẾU ĐANG NGỒI TRONG QUÁN)
         if (stateAtLeave !== 'WAITING_OUTSIDE') {
-            let table = this.tables.find(t => t.id === customer.assignedTableId);
-            table.status = 'EMPTY'; // Giải phóng bàn ăn ngay
+            let table = self.tables.find(t => t.id === customer.assignedTableId);
+            // BỎ DÒNG GIẢI PHÓNG BÀN SỚM Ở ĐÂY ĐỂ TRÁNH TRÙNG LẶP KHÁCH
 
-            this.tweens.add({
+            self.tweens.add({
                 targets: customer,
-                x: this.doorInsideX,
-                y: this.doorInsideY,
+                x: self.doorInsideX,
+                y: self.doorInsideY,
                 duration: 1000,
                 onComplete: () => {
-                    customer.setPosition(this.doorOutsideX, this.doorOutsideY);
-                    this.tweens.add({
+                    customer.setPosition(self.doorOutsideX, self.doorOutsideY);
+                    self.tweens.add({
                         targets: customer,
-                        x: this.queueStartX,
-                        y: this.queueStartY,
+                        x: self.queueStartX,
+                        y: self.queueStartY,
                         duration: 1000,
                         onComplete: () => {
                             angryBubble.destroy();
-                            this.customers = this.customers.filter(c => c !== customer);
+                            self.customers = self.customers.filter(c => c !== customer);
                             customer.destroy();
+
+                            // =======================================================
+                            // CHỈ GIẢI PHÓNG BÀN KHI KHÁCH GIẬN DỮ ĐÃ BƯỚC HẲN RA KHỎI QUÁN
+                            // =======================================================
+                            if (table) {
+                                table.status = 'EMPTY'; // Lúc này bàn mới thực sự trống để đón người mới
+                            }
+                            // =======================================================
+
+                            self.updateChatterAtmosphere();
                         }
                     });
                 }
             });
-        } else {
-            // Nếu giận dữ ngoài đường thì tự hủy luôn
-            angryBubble.destroy();
-            this.waitingQueue = this.waitingQueue.filter(c => c !== customer);
-            this.customers = this.customers.filter(c => c !== customer);
-            customer.destroy();
-            this.updateQueuePositions();
         }
 
         // 4. HÌNH PHẠT: KHÓA SPAWNER ĐẺ KHÁCH TRONG 1 PHÚT (60 GIÂY)
@@ -1346,6 +1379,10 @@ class GameScene extends Phaser.Scene {
                 if (this.gold >= staff.price) {
                     // Trừ tiền
                     this.gold -= staff.price;
+
+                    // PHÁT TIẾNG THUÊ NHÂN VIÊN
+                    this.sound.play('sfx_buy', { volume: 0.4 });
+
                     localStorage.setItem('hotpot_gold', this.gold.toString());
                     this.goldText.setText(`🪙 ${this.gold}`);
 
@@ -1415,6 +1452,8 @@ class GameScene extends Phaser.Scene {
                 this.washBg.setVisible(true);
                 this.washFill.setVisible(true).width = 0;
 
+                 this.sound.play('sfx_wash', { loop: true, volume: 0.25 });
+
                 this.tweens.add({
                     targets: this.washFill,
                     width: 80,
@@ -1423,6 +1462,8 @@ class GameScene extends Phaser.Scene {
                         this.dirtyDishes--; 
                         this.dirtyDishTxt.setText(`Bát bẩn: ${this.dirtyDishes}/5`);
                         
+                         this.sound.stopByKey('sfx_wash');
+
                         if (this.dirtyDishes === 0) {
                             this.dirtyDishesSprite.setVisible(false);
                         }
@@ -2079,4 +2120,24 @@ class GameScene extends Phaser.Scene {
 
         this.recipeUI.add([closeBtn, closeTxt]);
     }
+
+    updateChatterAtmosphere() {
+        // Tìm hoặc khởi tạo tiếng cười nói nếu chưa có
+        let chatter = this.sound.get('sfx_chatter');
+        if (!chatter) {
+            chatter = this.sound.add('sfx_chatter', { loop: true, volume: 0 });
+            chatter.play();
+        }
+
+        // Nếu quán có khách -> Âm lượng 20%, nếu quán rỗng -> Âm lượng về 0 (Im lặng)
+        let targetVolume = this.customers.length > 0 ? 0.2 : 0;
+
+        // Dùng Tween để tăng/giảm âm lượng từ từ cho mượt mà tự nhiên
+        this.tweens.add({
+            targets: chatter,
+            volume: targetVolume,
+            duration: 1000 // Chuyển đổi mượt mà trong 1 giây
+        });
+    }
+
 }
